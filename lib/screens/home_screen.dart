@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'products_screen.dart';
 import 'manpower_screen.dart';
@@ -252,96 +253,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBanner() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: SizedBox(
-        height: 120,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.network(
-                'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&h=240&fit=crop&auto=format',
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF1565C0)),
-              ),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xF01565C0), Color(0x801976D2)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              child: Text(
-                                'FUNDING',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Get Funded for Your\nConstruction Business',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              height: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Loans from ₹50K to ₹2 Crore',
-                            style: TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(14),
-                        child: Icon(Icons.account_balance_wallet,
-                            color: Colors.white, size: 28),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildBanner() => const _OfferSlider();
 
   Widget _buildRecentActivity() {
     return Padding(
@@ -552,6 +464,226 @@ class _Segment {
   final String imageUrl;
   const _Segment(
       this.label, this.icon, this.color, this.subtitle, this.imageUrl);
+}
+
+// ── Offer Slider ─────────────────────────────────────────────────────────────
+
+class _OfferSlide {
+  final String tag, title, subtitle, ctaLabel, imageUrl;
+  final Color color;
+  const _OfferSlide({
+    required this.tag,
+    required this.title,
+    required this.subtitle,
+    required this.ctaLabel,
+    required this.imageUrl,
+    required this.color,
+  });
+}
+
+class _OfferSlider extends StatefulWidget {
+  const _OfferSlider();
+
+  @override
+  State<_OfferSlider> createState() => _OfferSliderState();
+}
+
+class _OfferSliderState extends State<_OfferSlider> {
+  static const _slides = [
+    _OfferSlide(
+      tag: '🏷️ LIMITED OFFER',
+      title: 'Cement & Steel at\nFactory Prices',
+      subtitle: 'Up to 18% off on bulk orders this week',
+      ctaLabel: 'Shop Now',
+      imageUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&h=320&fit=crop&auto=format',
+      color: Color(0xFFE65100),
+    ),
+    _OfferSlide(
+      tag: '🏢 BUSINESS',
+      title: 'Register Your Business\nin 3 Easy Steps',
+      subtitle: 'Free GST + MSME + Trade License guidance',
+      ctaLabel: 'Get Started',
+      imageUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&h=320&fit=crop&auto=format',
+      color: Color(0xFF1565C0),
+    ),
+    _OfferSlide(
+      tag: '🏛️ GOVT SCHEME',
+      title: 'PM Mudra Loan\nUp to ₹10 Lakh',
+      subtitle: 'No collateral needed. Apply in minutes.',
+      ctaLabel: 'Apply Now',
+      imageUrl: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=800&h=320&fit=crop&auto=format',
+      color: Color(0xFF2E7D32),
+    ),
+    _OfferSlide(
+      tag: '👷 MANPOWER',
+      title: 'Hire Skilled Workers\nInstantly',
+      subtitle: '890+ verified workers ready across Assam',
+      ctaLabel: 'Find Workers',
+      imageUrl: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&h=320&fit=crop&auto=format',
+      color: Color(0xFF6A1B9A),
+    ),
+    _OfferSlide(
+      tag: '📋 LEADS',
+      title: 'Post a Project Lead,\nGet 5 Free Quotes',
+      subtitle: 'Connect with contractors in your district',
+      ctaLabel: 'Post Lead',
+      imageUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&h=320&fit=crop&auto=format',
+      color: Color(0xFF00695C),
+    ),
+  ];
+
+  late final PageController _ctrl;
+  Timer? _timer;
+  int _current = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = PageController(viewportFraction: 0.92);
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      final next = (_current + 1) % _slides.length;
+      _ctrl.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14, bottom: 4),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 165,
+            child: PageView.builder(
+              controller: _ctrl,
+              itemCount: _slides.length,
+              onPageChanged: (i) => setState(() => _current = i),
+              itemBuilder: (_, i) => _buildSlide(_slides[i]),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(_slides.length, (i) {
+              final active = i == _current;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 20 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: active ? const Color(0xFFE65100) : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlide(_OfferSlide slide) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              slide.imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => ColoredBox(color: slide.color),
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    slide.color.withValues(alpha: 0.88),
+                    slide.color.withValues(alpha: 0.42),
+                  ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      slide.tag,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    slide.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    slide.subtitle,
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 11, height: 1.3),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: slide.color,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text(slide.ctaLabel),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _SegmentCard extends StatelessWidget {
