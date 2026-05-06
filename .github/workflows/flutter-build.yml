@@ -13,6 +13,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write Firebase service account
+        run: |
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > firebase-service-account.json
+          test -s firebase-service-account.json
+
+      - name: Test Firebase authentication
+        run: |
+          npm install -g firebase-tools
+          firebase appdistribution:groups:list \
+            --project nee-new-app \
+            --service-account firebase-service-account.json
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -20,9 +32,6 @@ jobs:
       - run: flutter pub get
 
       - run: flutter build apk --release
-
-      - name: Write Firebase service account
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > firebase-service-account.json
 
       - name: Upload to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
