@@ -17,16 +17,17 @@ jobs:
         with:
           channel: stable
 
-      - run: flutter --version
-
       - run: flutter pub get
 
       - run: flutter build apk --release
+
+      - name: Write Firebase service account
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > firebase-service-account.json
 
       - name: Upload to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
-          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          serviceCredentialsFile: firebase-service-account.json
           groups: testers
           file: build/app/outputs/flutter-apk/app-release.apk
