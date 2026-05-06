@@ -21,9 +21,8 @@ jobs:
       - name: Test Firebase authentication
         run: |
           npm install -g firebase-tools
-          firebase appdistribution:groups:list \
-            --project nee-new-app \
-            --service-account firebase-service-account.json
+          export GOOGLE_APPLICATION_CREDENTIALS="$PWD/firebase-service-account.json"
+          firebase appdistribution:groups:list --project nee-new-app
 
       - uses: subosito/flutter-action@v2
         with:
