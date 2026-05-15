@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/funding_scheme_model.dart';
+import '../providers/funding_provider.dart';
+import '../services/activity_service.dart';
 
 class FundingScreen extends StatefulWidget {
   const FundingScreen({super.key});
@@ -9,32 +13,35 @@ class FundingScreen extends StatefulWidget {
 }
 
 class _FundingScreenState extends State<FundingScreen> {
-  String _selected = 'All';
-
   static const _filters = ['All', 'Government Scheme', 'Government Subsidy', 'Government Guarantee Scheme', 'Bank Loan', 'NBFC / Private'];
   static const _filterLabels = ['All', 'Govt Schemes', 'Subsidies', 'Guarantee', 'Bank Loans', 'Private'];
 
-  List<FundingOption> get _filtered => _selected == 'All'
-      ? mockFunding
-      : mockFunding.where((f) => f.type == _selected).toList();
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(title: const Text('Funding Support')),
-      body: Column(
-        children: [
-          _buildHero(),
-          _buildFilters(),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 24),
-              itemCount: _filtered.length,
-              itemBuilder: (_, i) => _FundingCard(option: _filtered[i]),
+    return Consumer<FundingProvider>(
+      builder: (context, prov, _) => Scaffold(
+        backgroundColor: const Color(0xFFF5F5F5),
+        appBar: AppBar(title: const Text('Funding Support')),
+        body: Column(
+          children: [
+            _buildHero(),
+            _buildFilters(prov),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: prov.fetch,
+                child: prov.filtered.isEmpty && prov.loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : prov.filtered.isEmpty
+                        ? const Center(child: Text('No funding schemes found'))
+                        : ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 24),
+                            itemCount: prov.filtered.length,
+                            itemBuilder: (_, i) => _FundingCard(option: prov.filtered[i]),
+                          ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -105,7 +112,7 @@ class _FundingScreenState extends State<FundingScreen> {
     );
   }
 
-  Widget _buildFilters() {
+  Widget _buildFilters(FundingProvider prov) {
     return SizedBox(
       height: 48,
       child: ListView.separated(
@@ -115,11 +122,11 @@ class _FundingScreenState extends State<FundingScreen> {
         separatorBuilder: (_, i) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final val = _filters[i];
-          final sel = _selected == val;
+          final sel = prov.type == val;
           return ChoiceChip(
             label: Text(_filterLabels[i], style: TextStyle(fontSize: 12, color: sel ? Colors.white : Colors.grey[700], fontWeight: sel ? FontWeight.w600 : FontWeight.normal)),
             selected: sel,
-            onSelected: (_) => setState(() => _selected = val),
+            onSelected: (_) => prov.setType(val),
             selectedColor: const Color(0xFF00695C),
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -131,7 +138,7 @@ class _FundingScreenState extends State<FundingScreen> {
 }
 
 class _FundingCard extends StatelessWidget {
-  final FundingOption option;
+  final FundingSchemeModel option;
   const _FundingCard({required this.option});
 
   static const _typeColors = {
@@ -187,14 +194,14 @@ class _FundingCard extends StatelessWidget {
                 _divider(),
                 _stat('Interest', '${option.interestRate}% p.a.', Icons.percent),
                 _divider(),
-                _stat('Tenure', option.duration, Icons.schedule),
+                _stat('Tenure', option.tenure ?? 'Flexible', Icons.schedule),
               ]),
             ),
             const SizedBox(height: 10),
             Row(children: [
               const Icon(Icons.info_outline, size: 14, color: Colors.grey),
               const SizedBox(width: 4),
-              Expanded(child: Text('Eligibility: ${option.eligibility}',
+              Expanded(child: Text('Eligibility: ${option.eligibility ?? 'Contact provider for eligibility'}',
                   style: TextStyle(color: Colors.grey[600], fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
             ]),
             const SizedBox(height: 12),
@@ -236,6 +243,7 @@ class _FundingCard extends StatelessWidget {
   Widget _divider() => Container(width: 1, height: 36, color: Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 8));
 
   void _showDetail(BuildContext context) {
+    activityService.log('view_funding', entityType: 'funding', entityId: option.id, entityName: option.name);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -255,13 +263,17 @@ class _FundingCard extends StatelessWidget {
             _row('Min Amount', _fmt(option.minAmount)),
             _row('Max Amount', _fmt(option.maxAmount)),
             _row('Interest Rate', '${option.interestRate}% per annum'),
-            _row('Repayment', option.duration),
-            _row('Eligibility', option.eligibility),
+            _row('Repayment', option.tenure ?? 'Flexible'),
+            _row('Eligibility', option.eligibility ?? 'Contact provider for eligibility'),
+            if (option.documents != null) _row('Documents', option.documents!),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showApply(context);
+                },
                 style: ElevatedButton.styleFrom(backgroundColor: _color),
                 child: const Text('Apply for This Scheme'),
               ),
@@ -281,6 +293,7 @@ class _FundingCard extends StatelessWidget {
   );
 
   void _showApply(BuildContext context) {
+    activityService.log('apply_funding', entityType: 'funding', entityId: option.id, entityName: option.name);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -304,8 +317,15 @@ class _FundingCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(context);
+                  if (option.applyUrl != null && option.applyUrl!.isNotEmpty) {
+                    final uri = Uri.parse(option.applyUrl!);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      return;
+                    }
+                  }
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Application submitted! Our team will contact you within 24 hours.'), backgroundColor: Colors.green),
                   );

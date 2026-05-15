@@ -20,11 +20,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.nee.nee_construction_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        applicationId = "com.nee.construction"
+        minSdk = 21
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -41,4 +38,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // TrueCaller Android SDK
+    implementation("com.truecaller.android.sdk:truecaller-sdk:2.7.3")
 }

@@ -1,31 +1,74 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/business_type_model.dart';
+import '../services/activity_service.dart';
+import '../services/api_service.dart';
 
-class BusinessScreen extends StatelessWidget {
+class BusinessScreen extends StatefulWidget {
   const BusinessScreen({super.key});
+
+  @override
+  State<BusinessScreen> createState() => _BusinessScreenState();
+}
+
+class _BusinessScreenState extends State<BusinessScreen> {
+  late Future<List<BusinessTypeModel>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<List<BusinessTypeModel>> _load() async {
+    final data = await apiService.getBusinessTypes();
+    return data.map((e) => BusinessTypeModel.fromJson(e)).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(title: const Text('Start Your Business')),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
-        children: [
-          _buildHero(),
-          _buildStats(),
-          const _SectionHeader('Choose Your Business Type'),
-          ...mockBusinessTypes.map((b) => _BusinessCard(type: b)),
-          const _SectionHeader('Why Start in Construction?'),
-          _buildWhyCards(),
-          const _SectionHeader('Government Support Available'),
-          _buildGovtSupport(),
-        ],
+      body: RefreshIndicator(
+        onRefresh: () async => setState(() => _future = _load()),
+        child: FutureBuilder<List<BusinessTypeModel>>(
+          future: _future,
+          builder: (context, snapshot) {
+            final types = snapshot.data ?? [];
+            return ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                _buildHero(context),
+                _buildStats(),
+                const _SectionHeader('Choose Your Business Type'),
+                if (snapshot.connectionState == ConnectionState.waiting)
+                  const Padding(
+                    padding: EdgeInsets.all(28),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (types.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(28),
+                    child: Center(child: Text('No business guides available')),
+                  )
+                else
+                  ...types.map((type) => _BusinessCard(type: type)),
+                const _SectionHeader('Consultation Fee'),
+                _consultationFeeCard(context),
+                const _SectionHeader('Why Start in Construction?'),
+                _buildWhyCards(),
+                const _SectionHeader('Government Support Available'),
+                _buildGovtSupport(),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildHero() {
+  Widget _buildHero(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
       decoration: const BoxDecoration(
@@ -35,27 +78,25 @@ class BusinessScreen extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: Colors.white.withAlpha(40), borderRadius: BorderRadius.circular(20)),
-            child: const Text('India\'s Fastest Growing Sector', style: TextStyle(color: Colors.white, fontSize: 11)),
-          ),
-          const SizedBox(height: 12),
-          const Text('Launch Your Construction\nBusiness Today', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.3)),
-          const SizedBox(height: 8),
-          const Text('Step-by-step guidance, funding support\nand a ready market waiting for you.',
-              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFFC62828)),
-            child: const Text('Get Free Consultation', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: Colors.white.withAlpha(40), borderRadius: BorderRadius.circular(20)),
+          child: const Text('Paid Expert Consultation', style: TextStyle(color: Colors.white, fontSize: 11)),
+        ),
+        const SizedBox(height: 12),
+        const Text('Launch Your Construction\nBusiness Today',
+            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.3)),
+        const SizedBox(height: 8),
+        const Text('Pay ₹100 consultation fee. Our admin team will contact you and track every follow-up.',
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: () => _showConsultationForm(context, null),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFFC62828)),
+          child: const Text('Pay ₹100 & Request Consultation', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ]),
     );
   }
 
@@ -63,11 +104,11 @@ class BusinessScreen extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Row(children: [
-        _statBox('₹11 Lakh Cr', 'Industry Size 2026', const Color(0xFFC62828)),
+        _statBox('₹100', 'Consultation Fee', const Color(0xFFC62828)),
         const SizedBox(width: 10),
-        _statBox('7.5 Crore+', 'Jobs in Construction', const Color(0xFF1565C0)),
+        _statBox('Admin', 'Follow-up Tracking', const Color(0xFF1565C0)),
         const SizedBox(width: 10),
-        _statBox('15–35%', 'Typical Margins', const Color(0xFF2E7D32)),
+        _statBox('Notes', 'Phone / Email / Office', const Color(0xFF2E7D32)),
       ]),
     );
   }
@@ -90,12 +131,35 @@ class BusinessScreen extends StatelessWidget {
     );
   }
 
+  Widget _consultationFeeCard(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFFC62828).withAlpha(25), borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.payments, color: Color(0xFFC62828)),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'A ₹100 Razorpay consultation fee is required before the admin team starts follow-up.',
+              style: TextStyle(fontSize: 13, height: 1.4),
+            ),
+          ),
+          TextButton(onPressed: () => _showConsultationForm(context, null), child: const Text('Apply')),
+        ]),
+      ),
+    );
+  }
+
   Widget _buildWhyCards() {
     const items = [
-      ('📈', 'High Demand', 'India needs 11 crore new homes by 2030. Massive opportunity.'),
-      ('🏛️', 'Govt Push', 'Smart Cities, PMAY, infra budget ₹11L crore creates constant work.'),
-      ('💰', 'Good Margins', '15–35% margins on projects. Cash flow positive within months.'),
-      ('🤝', 'Network Effect', 'One satisfied client brings 3–5 referrals in construction.'),
+      (Icons.trending_up, 'High Demand', 'Huge opportunity in homes, commercial work and infrastructure.'),
+      (Icons.account_balance, 'Govt Push', 'MSME, Mudra, PMEGP and procurement schemes support new businesses.'),
+      (Icons.currency_rupee, 'Good Margins', 'Construction services can generate strong repeat and referral revenue.'),
+      (Icons.handshake, 'Guided Start', 'Admin follow-up notes help track every customer conversation.'),
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -111,7 +175,7 @@ class BusinessScreen extends StatelessWidget {
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12),
               boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 6)]),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(item.$1, style: const TextStyle(fontSize: 24)),
+            Icon(item.$1, color: const Color(0xFFC62828)),
             const SizedBox(height: 6),
             Text(item.$2, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 4),
@@ -125,9 +189,9 @@ class BusinessScreen extends StatelessWidget {
   Widget _buildGovtSupport() {
     const items = [
       (Icons.account_balance, 'PM Mudra Yojana', 'Loans up to ₹10L with no collateral for small businesses.', Color(0xFF1565C0)),
-      (Icons.handshake, 'PMEGP Scheme', '15–35% capital subsidy for manufacturing businesses.', Color(0xFF2E7D32)),
-      (Icons.verified, 'Udyam Registration', 'Free MSME registration — unlocks priority lending & tenders.', Color(0xFF6A1B9A)),
-      (Icons.construction, 'GeM Portal', 'Sell directly to Govt — ₹2L Cr+ in annual procurement.', Color(0xFFE65100)),
+      (Icons.handshake, 'PMEGP Scheme', '15-35% capital subsidy for manufacturing businesses.', Color(0xFF2E7D32)),
+      (Icons.verified, 'Udyam Registration', 'Free MSME registration unlocks priority lending and tenders.', Color(0xFF6A1B9A)),
+      (Icons.construction, 'GeM Portal', 'Sell directly to government departments after registration.', Color(0xFFE65100)),
     ];
     return ListView.builder(
       shrinkWrap: true,
@@ -150,141 +214,167 @@ class BusinessScreen extends StatelessWidget {
               const SizedBox(height: 3),
               Text(item.$3, style: TextStyle(color: Colors.grey[600], fontSize: 12, height: 1.3)),
             ])),
-            Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
           ]),
         );
       },
     );
   }
+
+  void _showConsultationForm(BuildContext context, BusinessTypeModel? type) {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final districtCtrl = TextEditingController();
+    final messageCtrl = TextEditingController(text: type == null ? '' : 'Interested in ${type.name}');
+    String stage = 'Planning';
+    var submitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(type == null ? 'Request Consultation' : 'Consultation - ${type.name}',
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              const Text('Consultation fee: ₹100 via Razorpay', style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 16),
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name')),
+              const SizedBox(height: 10),
+              TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Mobile Number')),
+              const SizedBox(height: 10),
+              TextField(controller: emailCtrl, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email (optional)')),
+              const SizedBox(height: 10),
+              TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'District')),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: stage,
+                decoration: const InputDecoration(labelText: 'Business Stage'),
+                items: ['Planning', 'Already started', 'Need funding', 'Need documents', 'Need customers']
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
+                onChanged: (value) => setModalState(() => stage = value ?? stage),
+              ),
+              const SizedBox(height: 10),
+              TextField(controller: messageCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'What help do you need?')),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: submitting ? null : () async {
+                    if (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty) return;
+                    setModalState(() => submitting = true);
+                    try {
+                      final result = await apiService.requestBusinessConsultation({
+                        if (type != null) 'business_type_id': type.id,
+                        'name': nameCtrl.text.trim(),
+                        'phone': phoneCtrl.text.trim(),
+                        if (emailCtrl.text.trim().isNotEmpty) 'email': emailCtrl.text.trim(),
+                        'district': districtCtrl.text.trim(),
+                        'business_stage': stage,
+                        'message': messageCtrl.text.trim(),
+                      });
+                      await activityService.log('apply_business_consultation',
+                          entityType: 'business',
+                          entityName: type?.name ?? 'Business Consultation',
+                          extra: {'fee': 100});
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      final url = result['payment_url']?.toString();
+                      if (url != null && url.isNotEmpty) {
+                        final uri = Uri.parse(url);
+                        final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        if (!opened && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Payment link created, but Razorpay could not be opened.'), backgroundColor: Colors.orange),
+                          );
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Request saved. Razorpay payment link was not created.'), backgroundColor: Colors.orange),
+                        );
+                      }
+                    } catch (_) {
+                      setModalState(() => submitting = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please login and try again.'), backgroundColor: Colors.red),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC62828), padding: const EdgeInsets.symmetric(vertical: 14)),
+                  child: Text(submitting ? 'Creating payment...' : 'Pay ₹100 with Razorpay'),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _BusinessCard extends StatelessWidget {
-  final BusinessType type;
+  final BusinessTypeModel type;
   const _BusinessCard({required this.type});
-
-  static const _businessImages = {
-    'Construction Contractor': 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&h=200&fit=crop&auto=format',
-    'Building Material Supply': 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&h=200&fit=crop&auto=format',
-    'Manpower Agency': 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&h=200&fit=crop&auto=format',
-    'Interior Design Firm': 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&h=200&fit=crop&auto=format',
-  };
-
-  String get _imageUrl => _businessImages[type.name] ?? 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&h=200&fit=crop&auto=format';
 
   @override
   Widget build(BuildContext context) {
+    final state = context.findAncestorStateOfType<_BusinessScreenState>();
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _showDetail(context),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: 130,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    _imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        ColoredBox(color: type.color.withValues(alpha: 0.2)),
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          type.color.withValues(alpha: 0.3),
-                          type.color.withValues(alpha: 0.88),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 12, left: 14, right: 14,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(type.name,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16)),
-                              const SizedBox(height: 2),
-                              Text(type.description,
-                                  style: const TextStyle(
-                                      color: Colors.white70, fontSize: 11),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                            ],
-                          ),
-                        ),
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Icon(type.icon,
-                                color: Colors.white, size: 22),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+        onTap: () => _showDetail(context, state),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            height: 126,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [type.color.withAlpha(200), type.color],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    _pill(Icons.currency_rupee,
-                        'Investment: ${type.minInvestment} – ${type.maxInvestment}',
-                        Colors.blue),
-                    const SizedBox(width: 8),
-                    _pill(Icons.trending_up, type.returns, Colors.green),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _showDetail(context),
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: type.color,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 10)),
-                        child: const Text('View Guide',
-                            style: TextStyle(fontSize: 13)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    OutlinedButton(
-                      onPressed: () {},
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: type.color,
-                          side: BorderSide(color: type.color),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10)),
-                      child: const Text('Talk to Expert',
-                          style: TextStyle(fontSize: 13)),
-                    ),
-                  ]),
-                ],
-              ),
-            ),
-          ],
-        ),
+            padding: const EdgeInsets.all(16),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(type.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 4),
+                Text(type.description, style: const TextStyle(color: Colors.white70, fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+              ])),
+              Icon(type.iconData, color: Colors.white, size: 32),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(children: [
+              Row(children: [
+                _pill(Icons.currency_rupee, '${type.minInvestment} - ${type.maxInvestment}', Colors.blue),
+                const SizedBox(width: 8),
+                _pill(Icons.trending_up, type.expectedReturns, Colors.green),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _showDetail(context, state),
+                    style: ElevatedButton.styleFrom(backgroundColor: type.color),
+                    child: const Text('View Guide', style: TextStyle(fontSize: 13)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton(
+                  onPressed: () => state?._showConsultationForm(context, type),
+                  style: OutlinedButton.styleFrom(foregroundColor: type.color, side: BorderSide(color: type.color)),
+                  child: const Text('Talk to Expert', style: TextStyle(fontSize: 13)),
+                ),
+              ]),
+            ]),
+          ),
+        ]),
       ),
     );
   }
@@ -304,7 +394,7 @@ class _BusinessCard extends StatelessWidget {
     );
   }
 
-  void _showDetail(BuildContext context) {
+  void _showDetail(BuildContext context, _BusinessScreenState? state) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -320,68 +410,54 @@ class _BusinessCard extends StatelessWidget {
             const SizedBox(height: 16),
             Row(children: [
               Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: type.color.withAlpha(25), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(type.icon, color: type.color, size: 28)),
+                  child: Icon(type.iconData, color: type.color, size: 28)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(type.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text(type.returns, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                Text(type.expectedReturns, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
               ])),
             ]),
             const SizedBox(height: 14),
             Text(type.description, style: TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 14)),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: _infoBox('Min Investment', type.minInvestment, Icons.arrow_downward, Colors.green)),
-              const SizedBox(width: 10),
-              Expanded(child: _infoBox('Max Investment', type.maxInvestment, Icons.arrow_upward, Colors.orange)),
-            ]),
             const SizedBox(height: 16),
             const Text('Steps to Start', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            ...type.steps.asMap().entries.map((e) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                CircleAvatar(radius: 12, backgroundColor: type.color, child: Text('${e.key + 1}', style: const TextStyle(color: Colors.white, fontSize: 11))),
-                const SizedBox(width: 10),
-                Expanded(child: Text(e.value, style: const TextStyle(fontSize: 13, height: 1.4))),
-              ]),
-            )),
+            for (final entry in type.steps.asMap().entries)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  CircleAvatar(radius: 12, backgroundColor: type.color, child: Text('${entry.key + 1}', style: const TextStyle(color: Colors.white, fontSize: 11))),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(entry.value, style: const TextStyle(fontSize: 13, height: 1.4))),
+                ]),
+              ),
             const SizedBox(height: 16),
             const Text('Documents Required', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            ...type.documents.map((d) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(children: [
-                Icon(Icons.check_circle, color: type.color, size: 16),
-                const SizedBox(width: 8),
-                Text(d, style: const TextStyle(fontSize: 13)),
-              ]),
-            )),
+            for (final doc in type.documents)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(children: [
+                  Icon(Icons.check_circle, color: type.color, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(doc, style: const TextStyle(fontSize: 13))),
+                ]),
+              ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pop(context);
+                  state?._showConsultationForm(context, type);
+                },
                 style: ElevatedButton.styleFrom(backgroundColor: type.color, padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: const Text('Start This Business Journey'),
+                child: const Text('Pay ₹100 & Talk to Expert'),
               ),
             ),
           ]),
         ),
       ),
-    );
-  }
-
-  Widget _infoBox(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: color.withAlpha(20), borderRadius: BorderRadius.circular(10)),
-      child: Column(children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-      ]),
     );
   }
 }

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/area_contact_model.dart';
+import '../providers/area_contact_provider.dart';
+import '../services/activity_service.dart';
 
 class AreaContactsScreen extends StatefulWidget {
   const AreaContactsScreen({super.key});
@@ -9,9 +13,6 @@ class AreaContactsScreen extends StatefulWidget {
 }
 
 class _AreaContactsScreenState extends State<AreaContactsScreen> {
-  String _selectedRegion = 'All';
-  String _search = '';
-
   static const _regions = [
     'All',
     'Upper Assam',
@@ -31,57 +32,37 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
     'Hills': Color(0xFF37474F),
   };
 
-  List<AreaContact> get _filtered {
-    return mockAreaContacts.where((c) {
-      final matchRegion =
-          _selectedRegion == 'All' || c.region == _selectedRegion;
-      final q = _search.toLowerCase();
-      final matchSearch = q.isEmpty ||
-          c.district.toLowerCase().contains(q) ||
-          c.name.toLowerCase().contains(q) ||
-          c.designation.toLowerCase().contains(q);
-      return matchRegion && matchSearch;
-    }).toList();
-  }
-
-  Map<String, List<AreaContact>> get _grouped {
-    final Map<String, List<AreaContact>> m = {};
-    for (final c in _filtered) {
-      m.putIfAbsent(c.region, () => []).add(c);
-    }
-    return m;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Consumer<AreaContactProvider>(
+      builder: (context, prov, _) => Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: const Text('Area Contacts'),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () => _showSearch(context),
+            onPressed: () => _showSearch(context, prov),
           ),
         ],
       ),
       body: Column(
         children: [
           _buildHero(),
-          _buildRegionFilter(),
-          if (_search.isNotEmpty)
+          _buildRegionFilter(prov),
+          if (prov.search.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Row(
                 children: [
-                  Text('Results for "$_search"',
+                  Text('Results for "${prov.search}"',
                       style: TextStyle(
                           color: Colors.grey[600],
                           fontSize: 12,
                           fontStyle: FontStyle.italic)),
                   const Spacer(),
                   TextButton(
-                    onPressed: () => setState(() => _search = ''),
+                    onPressed: () => prov.setSearch(''),
                     child: const Text('Clear',
                         style: TextStyle(
                             color: Color(0xFF37474F), fontSize: 12)),
@@ -90,13 +71,16 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
               ),
             ),
           Expanded(
-            child: _filtered.isEmpty
-                ? _buildEmpty()
-                : _selectedRegion != 'All'
-                    ? _buildFlatList(_filtered)
-                    : _buildGroupedList(),
+            child: prov.filtered.isEmpty && prov.loading
+                ? const Center(child: CircularProgressIndicator())
+                : prov.filtered.isEmpty
+                    ? _buildEmpty()
+                    : prov.region != 'All'
+                        ? _buildFlatList(prov.filtered)
+                        : _buildGroupedList(prov),
           ),
         ],
+      ),
       ),
     );
   }
@@ -174,7 +158,7 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
     );
   }
 
-  Widget _buildRegionFilter() {
+  Widget _buildRegionFilter(AreaContactProvider prov) {
     return SizedBox(
       height: 46,
       child: ListView.separated(
@@ -184,13 +168,13 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final r = _regions[i];
-          final sel = r == _selectedRegion;
+          final sel = r == prov.region;
           final color =
               _regionColors[r] ?? const Color(0xFF37474F);
           return ChoiceChip(
             label: Text(r),
             selected: sel,
-            onSelected: (_) => setState(() => _selectedRegion = r),
+            onSelected: (_) => prov.setRegion(r),
             selectedColor: color,
             labelStyle: TextStyle(
               color: sel ? Colors.white : Colors.grey[700],
@@ -206,8 +190,8 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
     );
   }
 
-  Widget _buildGroupedList() {
-    final grouped = _grouped;
+  Widget _buildGroupedList(AreaContactProvider prov) {
+    final grouped = prov.grouped;
     final regionOrder = [
       'Upper Assam',
       'Lower Assam',
@@ -228,7 +212,7 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
     );
   }
 
-  Widget _buildFlatList(List<AreaContact> contacts) {
+  Widget _buildFlatList(List<AreaContactModel> contacts) {
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 24),
       itemCount: contacts.length,
@@ -288,7 +272,7 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
     );
   }
 
-  void _showSearch(BuildContext context) {
+  void _showSearch(BuildContext context, AreaContactProvider prov) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -303,7 +287,7 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
             TextField(
               autofocus: true,
               onChanged: (v) {
-                setState(() => _search = v);
+                prov.setSearch(v);
                 Navigator.pop(context);
               },
               decoration: InputDecoration(
@@ -323,7 +307,7 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
 }
 
 class _ContactCard extends StatelessWidget {
-  final AreaContact contact;
+  final AreaContactModel contact;
   const _ContactCard({required this.contact});
 
   static const _regionColors = {
@@ -435,14 +419,14 @@ class _ContactCard extends StatelessWidget {
                         icon: Icons.phone,
                         label: 'Call',
                         color: _color,
-                        onTap: () => _showCallDialog(context),
+                        onTap: () => _showContactDialog(context, whatsapp: false),
                       ),
                       const SizedBox(width: 8),
                       _ActionButton(
                         icon: Icons.chat,
                         label: 'WhatsApp',
                         color: const Color(0xFF25D366),
-                        onTap: () => _showCallDialog(context),
+                        onTap: () => _showContactDialog(context, whatsapp: true),
                       ),
                       const Spacer(),
                       Text(contact.phone,
@@ -461,7 +445,14 @@ class _ContactCard extends StatelessWidget {
     );
   }
 
-  void _showCallDialog(BuildContext ctx) {
+  void _showContactDialog(BuildContext ctx, {required bool whatsapp}) {
+    activityService.log(
+      'call_contact',
+      entityType: 'contact',
+      entityId: contact.id,
+      entityName: '${contact.name} - ${contact.district}',
+      extra: {'phone': contact.phone, 'channel': whatsapp ? 'whatsapp' : 'call'},
+    );
     showDialog(
       context: ctx,
       builder: (_) => AlertDialog(
@@ -523,9 +514,18 @@ class _ContactCard extends StatelessWidget {
             child: const Text('Close'),
           ),
           ElevatedButton.icon(
-            onPressed: () => Navigator.pop(ctx),
-            icon: const Icon(Icons.phone, size: 16),
-            label: const Text('Call Now'),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final phone = whatsapp ? (contact.whatsapp ?? contact.phone) : contact.phone;
+              final uri = whatsapp
+                  ? Uri.parse('https://wa.me/91${phone.replaceAll(RegExp(r'[^\d]'), '')}')
+                  : Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^\d+]'), ''));
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: whatsapp ? LaunchMode.externalApplication : LaunchMode.platformDefault);
+              }
+            },
+            icon: Icon(whatsapp ? Icons.chat : Icons.phone, size: 16),
+            label: Text(whatsapp ? 'WhatsApp' : 'Call Now'),
           ),
         ],
       ),
