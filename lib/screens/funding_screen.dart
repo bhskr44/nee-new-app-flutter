@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/funding_scheme_model.dart';
 import '../providers/funding_provider.dart';
 import '../services/activity_service.dart';
+import '../services/api_service.dart';
 
 class FundingScreen extends StatefulWidget {
   const FundingScreen({super.key});
@@ -48,7 +49,7 @@ class _FundingScreenState extends State<FundingScreen> {
 
   Widget _buildHero() {
     return SizedBox(
-      height: 170,
+      height: 210,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -294,47 +295,85 @@ class _FundingCard extends StatelessWidget {
 
   void _showApply(BuildContext context) {
     activityService.log('apply_funding', entityType: 'funding', entityId: option.id, entityName: option.name);
+    final nameCtrl     = TextEditingController();
+    final businessCtrl = TextEditingController();
+    final phoneCtrl    = TextEditingController();
+    final amountCtrl   = TextEditingController();
+    bool submitting    = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Apply — ${option.name}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            const TextField(decoration: InputDecoration(labelText: 'Full Name')),
-            const SizedBox(height: 10),
-            const TextField(decoration: InputDecoration(labelText: 'Business Name')),
-            const SizedBox(height: 10),
-            const TextField(keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Mobile Number')),
-            const SizedBox(height: 10),
-            const TextField(keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Loan Amount Required (₹)')),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  if (option.applyUrl != null && option.applyUrl!.isNotEmpty) {
-                    final uri = Uri.parse(option.applyUrl!);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      return;
-                    }
-                  }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Application submitted! Our team will contact you within 24 hours.'), backgroundColor: Colors.green),
-                  );
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: _color, padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: const Text('Submit Application'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Apply — ${option.name}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name *')),
+              const SizedBox(height: 10),
+              TextField(controller: businessCtrl, decoration: const InputDecoration(labelText: 'Business Name')),
+              const SizedBox(height: 10),
+              TextField(controller: phoneCtrl, keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Mobile Number *')),
+              const SizedBox(height: 10),
+              TextField(controller: amountCtrl, keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Loan Amount Required (₹)')),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Please enter your name and phone number')),
+                            );
+                            return;
+                          }
+                          setModalState(() => submitting = true);
+                          try {
+                            final res = await apiService.applyFunding({
+                              'full_name':         nameCtrl.text.trim(),
+                              'business_name':     businessCtrl.text.trim(),
+                              'phone':             phoneCtrl.text.trim(),
+                              'loan_amount':       double.tryParse(amountCtrl.text.trim()),
+                              'funding_scheme_id': option.id,
+                            });
+                            if (!ctx.mounted) return;
+                            Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(res['message'] ?? 'Application submitted!'),
+                                  backgroundColor: Colors.green[700],
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          } catch (_) {
+                            setModalState(() => submitting = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(content: Text('Submission failed. Please try again.')),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: _color, padding: const EdgeInsets.symmetric(vertical: 14)),
+                  child: submitting
+                      ? const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Submit Application', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

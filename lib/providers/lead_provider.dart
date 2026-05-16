@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/lead_model.dart';
 import '../services/api_service.dart';
 
@@ -62,9 +63,9 @@ class LeadProvider extends ChangeNotifier {
     fetch(refresh: true);
   }
 
-  Future<bool> createLead(Map<String, dynamic> data) async {
+  Future<bool> createLead(Map<String, dynamic> data, {List<XFile>? images}) async {
     try {
-      await apiService.createLead(data);
+      await apiService.createLead(data, images: images);
       fetch(refresh: true);
       return true;
     } catch (_) {

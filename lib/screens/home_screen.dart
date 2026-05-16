@@ -105,12 +105,12 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-          onPressed: () {},
+          onPressed: () => context.push('/notifications'),
         ),
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: GestureDetector(
-            onTap: () {},
+            onTap: () => context.push('/profile'),
             child: const CircleAvatar(
               radius: 16,
               backgroundColor: Colors.white24,

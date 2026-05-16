@@ -7,6 +7,7 @@ class ProductModel {
   final double? rating;
   final int? stock;
   final String? postedBy;
+  final List<String> images;
 
   const ProductModel({
     required this.id,
@@ -22,6 +23,7 @@ class ProductModel {
     this.rating,
     this.stock,
     this.postedBy,
+    this.images = const [],
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> j) => ProductModel(
@@ -38,5 +40,6 @@ class ProductModel {
         rating: j['rating'] != null ? (j['rating'] as num).toDouble() : null,
         stock: j['stock'],
         postedBy: j['user']?['name'],
+        images: (j['image_urls'] as List?)?.map((e) => e.toString()).toList() ?? [],
       );
 }

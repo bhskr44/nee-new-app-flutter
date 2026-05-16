@@ -50,7 +50,7 @@ class _ManpowerScreenState extends State<ManpowerScreen> {
           actions: [IconButton(icon: const Icon(Icons.tune), onPressed: () {})],
         ),
         floatingActionButton: FloatingActionButton.extended(
-          onPressed: () {},
+          onPressed: () => _showRegisterWorker(context, prov),
           backgroundColor: const Color(0xFF1565C0),
           icon: const Icon(Icons.add, color: Colors.white),
           label: const Text('Register as Worker', style: TextStyle(color: Colors.white)),
@@ -105,6 +105,132 @@ class _ManpowerScreenState extends State<ManpowerScreen> {
               : null,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
           fillColor: Colors.white,
+        ),
+      ),
+    );
+  }
+
+  void _showRegisterWorker(BuildContext context, WorkerProvider prov) {
+    const tradeOptions = [
+      'Mason', 'Plumber', 'Electrician', 'Carpenter', 'Painter',
+      'Welder', 'Tiler', 'Roofer', 'Plasterer', 'Steel Fixer',
+      'Concrete Mixer', 'Equipment Operator', 'Site Supervisor',
+    ];
+    final phoneCtrl    = TextEditingController();
+    final locationCtrl = TextEditingController();
+    final rateCtrl     = TextEditingController();
+    final expCtrl      = TextEditingController();
+    final bioCtrl      = TextEditingController();
+    String selectedTrade = 'Mason';
+    bool submitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Register as Worker', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text('Your profile will be visible to contractors on the platform.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedTrade,
+                items: tradeOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                onChanged: (v) => setModalState(() => selectedTrade = v!),
+                decoration: const InputDecoration(labelText: 'Trade / Skill *'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone Number *'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: locationCtrl,
+                decoration: const InputDecoration(labelText: 'Location (District) *'),
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: rateCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Daily Rate (₹) *'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: expCtrl,
+                    decoration: const InputDecoration(labelText: 'Experience (e.g. 5 yrs)'),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              TextField(
+                controller: bioCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'About You (optional)'),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1565C0),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (phoneCtrl.text.trim().isEmpty ||
+                              locationCtrl.text.trim().isEmpty ||
+                              rateCtrl.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Please fill all required fields')),
+                            );
+                            return;
+                          }
+                          setModalState(() => submitting = true);
+                          final error = await prov.register({
+                            'trade':      selectedTrade,
+                            'phone':      phoneCtrl.text.trim(),
+                            'location':   locationCtrl.text.trim(),
+                            'daily_rate': double.tryParse(rateCtrl.text.trim()) ?? 0,
+                            'experience': expCtrl.text.trim().isEmpty ? '1 yr' : expCtrl.text.trim(),
+                            'bio':        bioCtrl.text.trim(),
+                          });
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(error ?? 'Profile registered! You are now visible to contractors.'),
+                                backgroundColor: error == null ? Colors.green[700] : Colors.red[700],
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                            if (error == null) prov.fetch(refresh: true);
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Submit Registration', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

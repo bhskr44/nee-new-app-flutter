@@ -59,4 +59,13 @@ class WorkerProvider extends ChangeNotifier {
     _search = q;
     fetch(refresh: true);
   }
+
+  Future<String?> register(Map<String, dynamic> data) async {
+    try {
+      await apiService.createWorker(data);
+      return null; // success
+    } catch (e) {
+      return e.toString().contains('422') ? 'Validation error. Check your inputs.' : 'Registration failed. Try again.';
+    }
+  }
 }

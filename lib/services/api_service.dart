@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import '../config/constants.dart';
 import 'storage_service.dart';
 
@@ -120,7 +121,24 @@ class ApiService {
     return res.data;
   }
 
-  Future<Map<String, dynamic>> createProduct(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> createProduct(Map<String, dynamic> data, {List<XFile>? images}) async {
+    if (images != null && images.isNotEmpty) {
+      final formData = FormData();
+      data.forEach((key, value) {
+        if (value is bool) {
+          formData.fields.add(MapEntry(key, value ? '1' : '0'));
+        } else if (value != null) {
+          formData.fields.add(MapEntry(key, value.toString()));
+        }
+      });
+      for (final img in images) {
+        final bytes = await img.readAsBytes();
+        formData.files.add(MapEntry('images[]',
+            MultipartFile.fromBytes(bytes, filename: img.name)));
+      }
+      final res = await _dio.post('/products', data: formData);
+      return res.data;
+    }
     final res = await _dio.post('/products', data: data);
     return res.data;
   }
@@ -175,8 +193,35 @@ class ApiService {
     return res.data;
   }
 
-  Future<Map<String, dynamic>> createLead(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> createLead(Map<String, dynamic> data, {List<XFile>? images}) async {
+    if (images != null && images.isNotEmpty) {
+      final formData = FormData();
+      data.forEach((key, value) {
+        if (value is bool) {
+          formData.fields.add(MapEntry(key, value ? '1' : '0'));
+        } else if (value != null) {
+          formData.fields.add(MapEntry(key, value.toString()));
+        }
+      });
+      for (final img in images) {
+        final bytes = await img.readAsBytes();
+        formData.files.add(MapEntry('images[]',
+            MultipartFile.fromBytes(bytes, filename: img.name)));
+      }
+      final res = await _dio.post('/leads', data: formData);
+      return res.data;
+    }
     final res = await _dio.post('/leads', data: data);
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> getLeadFeedbacks(int leadId) async {
+    final res = await _dio.get('/leads/$leadId/feedbacks');
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> submitLeadFeedback(int leadId, Map<String, dynamic> data) async {
+    final res = await _dio.post('/leads/$leadId/feedback', data: data);
     return res.data;
   }
 
@@ -207,6 +252,21 @@ class ApiService {
       if (search != null && search.isNotEmpty) 'search': search,
     });
     return res.data as List;
+  }
+
+  Future<Map<String, dynamic>> applyFunding(Map<String, dynamic> data) async {
+    final res = await _dio.post('/funding/apply', data: data);
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> applyJob(int jobId, Map<String, dynamic> data) async {
+    final res = await _dio.post('/jobs/$jobId/apply', data: data);
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> enrollCourse(int courseId, Map<String, dynamic> data) async {
+    final res = await _dio.post('/courses/$courseId/enroll', data: data);
+    return res.data;
   }
 
   // Area Contacts

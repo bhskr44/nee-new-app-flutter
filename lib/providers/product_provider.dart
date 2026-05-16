@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/product_model.dart';
 import '../services/api_service.dart';
 
@@ -58,5 +59,14 @@ class ProductProvider extends ChangeNotifier {
   void setSearch(String q) {
     _search = q;
     fetch(refresh: true);
+  }
+
+  Future<String?> create(Map<String, dynamic> data, {List<XFile>? images}) async {
+    try {
+      final res = await apiService.createProduct(data, images: images);
+      return res['message'] as String?;
+    } catch (e) {
+      return null;
+    }
   }
 }

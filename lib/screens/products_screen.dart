@@ -1,4 +1,6 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/product_model.dart';
@@ -143,12 +145,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   void _showPostProduct(BuildContext context, ProductProvider prov) {
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
+    final nameCtrl     = TextEditingController();
+    final priceCtrl    = TextEditingController();
     final locationCtrl = TextEditingController();
     final supplierCtrl = TextEditingController();
-    final unitCtrl = TextEditingController();
-    String selectedCat = 'Cement';
+    final unitCtrl     = TextEditingController();
+    String selectedCat    = 'Cement';
+    bool submitting       = false;
+    List<XFile> pickedImages = [];
+    final picker = ImagePicker();
 
     showModalBottomSheet(
       context: context,
@@ -157,43 +162,166 @@ class _ProductsScreenState extends State<ProductsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Padding(
           padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Post Your Product', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Product Name')),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: selectedCat,
-                items: _categories.skip(1).map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (v) => setModalState(() => selectedCat = v!),
-                decoration: const InputDecoration(labelText: 'Category'),
-              ),
-              const SizedBox(height: 10),
-              TextField(controller: supplierCtrl, decoration: const InputDecoration(labelText: 'Supplier Name')),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: TextField(controller: priceCtrl, decoration: const InputDecoration(labelText: 'Price (₹)'), keyboardType: TextInputType.number)),
-                const SizedBox(width: 10),
-                Expanded(child: TextField(controller: unitCtrl, decoration: const InputDecoration(labelText: 'Unit (bag/ton)'))),
-              ]),
-              const SizedBox(height: 10),
-              TextField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'Location')),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (nameCtrl.text.isEmpty || priceCtrl.text.isEmpty) return;
-                    Navigator.pop(ctx);
-                    await context.read<ProductProvider>().fetch(refresh: true);
-                  },
-                  child: const Text('Submit Listing'),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Post Your Product', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text('Your listing will go live after admin review.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                const SizedBox(height: 16),
+                TextField(controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Product Name *')),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedCat,
+                  items: _categories.skip(1).map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) => setModalState(() => selectedCat = v!),
+                  decoration: const InputDecoration(labelText: 'Category'),
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                TextField(controller: supplierCtrl,
+                    decoration: const InputDecoration(labelText: 'Supplier Name *')),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: TextField(
+                    controller: priceCtrl,
+                    decoration: const InputDecoration(labelText: 'Price (₹) *'),
+                    keyboardType: TextInputType.number,
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: TextField(
+                    controller: unitCtrl,
+                    decoration: const InputDecoration(labelText: 'Unit (bag/ton) *'),
+                  )),
+                ]),
+                const SizedBox(height: 10),
+                TextField(controller: locationCtrl,
+                    decoration: const InputDecoration(labelText: 'Location *')),
+                const SizedBox(height: 14),
+                // Photo picker
+                Text('Photos (optional)', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 80,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      ...pickedImages.asMap().entries.map((e) => Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 76, height: 76,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.grey[200],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: FutureBuilder(
+                                future: e.value.readAsBytes(),
+                                builder: (_, snap) => snap.hasData
+                                    ? Image.memory(snap.requireData, fit: BoxFit.cover)
+                                    : Container(color: Colors.grey[200]),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: -4, right: 4,
+                            child: GestureDetector(
+                              onTap: () => setModalState(() => pickedImages.removeAt(e.key)),
+                              child: Container(
+                                width: 18, height: 18,
+                                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                child: const Icon(Icons.close, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )),
+                      if (pickedImages.length < 6)
+                        GestureDetector(
+                          onTap: () async {
+                            final imgs = await picker.pickMultiImage(imageQuality: 75);
+                            if (imgs.isNotEmpty) {
+                              setModalState(() {
+                                pickedImages = [...pickedImages, ...imgs].take(6).toList();
+                              });
+                            }
+                          },
+                          child: Container(
+                            width: 76, height: 76,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Icon(Icons.add_photo_alternate_outlined, color: Colors.grey[500], size: 24),
+                              Text('Add', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                            ]),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFBF360C),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: submitting
+                        ? null
+                        : () async {
+                            if (nameCtrl.text.trim().isEmpty ||
+                                priceCtrl.text.trim().isEmpty ||
+                                supplierCtrl.text.trim().isEmpty ||
+                                unitCtrl.text.trim().isEmpty ||
+                                locationCtrl.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(content: Text('Please fill all required fields')),
+                              );
+                              return;
+                            }
+                            setModalState(() => submitting = true);
+                            final msg = await prov.create({
+                              'name':     nameCtrl.text.trim(),
+                              'category': selectedCat,
+                              'supplier': supplierCtrl.text.trim(),
+                              'price':    double.tryParse(priceCtrl.text.trim()) ?? 0,
+                              'unit':     unitCtrl.text.trim(),
+                              'location': locationCtrl.text.trim(),
+                            }, images: pickedImages.isEmpty ? null : pickedImages);
+                            if (!ctx.mounted) return;
+                            Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(msg ?? 'Product submitted for review.'),
+                                  backgroundColor: Colors.green[700],
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          },
+                    child: submitting
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Text('Submit for Review', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -245,7 +373,6 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _catColor(product.category);
-    final imgUrl = _categoryImages[product.category];
     final rating = product.rating ?? 0.0;
 
     return Card(
@@ -258,23 +385,15 @@ class _ProductCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
                 width: 80, height: 80,
-                child: Stack(fit: StackFit.expand, children: [
-                  if (imgUrl != null)
-                    Image.network(imgUrl, fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => ColoredBox(color: color.withAlpha(30)))
-                  else
-                    ColoredBox(color: color.withAlpha(30)),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [color.withAlpha(90), color.withAlpha(153)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                  Center(child: Icon(_catIcon(product.category), color: Colors.white, size: 30)),
-                ]),
+                child: product.images.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: product.images.first,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(color: color.withAlpha(30),
+                            child: Center(child: Icon(_catIcon(product.category), color: color, size: 30))),
+                        errorWidget: (_, __, ___) => _FallbackThumb(color: color, category: product.category),
+                      )
+                    : _FallbackThumb(color: color, category: product.category),
               ),
             ),
             const SizedBox(width: 12),
@@ -356,12 +475,17 @@ class _ProductCard extends StatelessWidget {
             Center(child: Container(width: 40, height: 4,
                 decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 16),
-            Container(
-              width: double.infinity, height: 140,
-              decoration: BoxDecoration(color: color.withAlpha(26), borderRadius: BorderRadius.circular(12)),
-              child: Icon(_catIcon(product.category), color: color, size: 70),
-            ),
-            const SizedBox(height: 16),
+            if (product.images.isNotEmpty) ...[
+              _ProductImageGallery(images: product.images, color: color, category: product.category),
+              const SizedBox(height: 16),
+            ] else ...[
+              Container(
+                width: double.infinity, height: 140,
+                decoration: BoxDecoration(color: color.withAlpha(26), borderRadius: BorderRadius.circular(12)),
+                child: Icon(_catIcon(product.category), color: color, size: 70),
+              ),
+              const SizedBox(height: 16),
+            ],
             Text(product.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             if (product.description != null) ...[
               const SizedBox(height: 8),
@@ -471,4 +595,148 @@ class _ProductCard extends StatelessWidget {
           Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
         ]),
       );
+}
+
+// ─── Fallback thumbnail (no images) ───────────────────────────────────────────
+
+class _FallbackThumb extends StatelessWidget {
+  final Color color;
+  final String category;
+  const _FallbackThumb({required this.color, required this.category});
+
+  @override
+  Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
+        ColoredBox(color: color.withAlpha(30)),
+        DecoratedBox(decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [color.withAlpha(90), color.withAlpha(153)],
+            begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          ),
+        )),
+        Center(child: Icon(_catIcon(category), color: Colors.white, size: 30)),
+      ]);
+}
+
+// ─── Product image gallery ─────────────────────────────────────────────────────
+
+class _ProductImageGallery extends StatefulWidget {
+  final List<String> images;
+  final Color color;
+  final String category;
+  const _ProductImageGallery({required this.images, required this.color, required this.category});
+
+  @override
+  State<_ProductImageGallery> createState() => _ProductImageGalleryState();
+}
+
+class _ProductImageGalleryState extends State<_ProductImageGallery> {
+  int _current = 0;
+  late final PageController _ctrl;
+
+  @override
+  void initState() { super.initState(); _ctrl = PageController(); }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          height: 200,
+          child: PageView.builder(
+            controller: _ctrl,
+            itemCount: widget.images.length,
+            onPageChanged: (i) => setState(() => _current = i),
+            itemBuilder: (_, i) => GestureDetector(
+              onTap: () => _openFullscreen(context, i),
+              child: CachedNetworkImage(
+                imageUrl: widget.images[i],
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(color: widget.color.withAlpha(30),
+                    child: Center(child: Icon(_catIcon(widget.category), color: widget.color, size: 50))),
+                errorWidget: (_, __, ___) => Container(color: widget.color.withAlpha(30),
+                    child: Icon(_catIcon(widget.category), color: widget.color, size: 50)),
+              ),
+            ),
+          ),
+        ),
+      ),
+      if (widget.images.length > 1) ...[
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 60,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: widget.images.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final sel = _current == i;
+              return GestureDetector(
+                onTap: () {
+                  _ctrl.animateToPage(i,
+                      duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+                  setState(() => _current = i);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 60,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: sel ? const Color(0xFFE65100) : Colors.transparent,
+                      width: 2.5,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: CachedNetworkImage(
+                      imageUrl: widget.images[i],
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(color: Colors.grey[200]),
+                      errorWidget: (_, __, ___) => Container(color: Colors.grey[200],
+                          child: const Icon(Icons.image, size: 16, color: Colors.grey)),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    ]);
+  }
+
+  void _openFullscreen(BuildContext context, int initial) {
+    int idx = initial;
+    final ctrl = PageController(initialPage: initial);
+    showDialog(
+      context: context,
+      builder: (_) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          iconTheme: const IconThemeData(color: Colors.white),
+          title: StatefulBuilder(
+            builder: (_, ss) => Text('${idx + 1} / ${widget.images.length}',
+                style: const TextStyle(color: Colors.white, fontSize: 14)),
+          ),
+        ),
+        body: PageView.builder(
+          controller: ctrl,
+          itemCount: widget.images.length,
+          onPageChanged: (i) => idx = i,
+          itemBuilder: (_, i) => InteractiveViewer(
+            child: Center(child: CachedNetworkImage(
+              imageUrl: widget.images[i], fit: BoxFit.contain,
+              placeholder: (_, __) => const CircularProgressIndicator(color: Colors.white),
+              errorWidget: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white, size: 60),
+            )),
+          ),
+        ),
+      ),
+    );
+  }
 }

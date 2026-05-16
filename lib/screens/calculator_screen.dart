@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 enum _Category { all, structural, finishing, mep, woodwork }
 
@@ -66,77 +67,112 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [Color(0xFF1B5E20), Color(0xFF388E3C)]),
-            ),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.construction, color: Colors.white, size: 28),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(colors: [Color(0xFF1B5E20), Color(0xFF388E3C)]),
               ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Smart Calculators', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 2),
-                  Text('16 tools • Instant material & cost estimates', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.construction, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Smart Calculators', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 2),
+                    Text('16 tools • Instant material & cost estimates', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  ]),
+                ),
+              ]),
+            ),
+            // House Construction Wizard banner
+            GestureDetector(
+              onTap: () => context.push('/house-calculator'),
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1B5E20), Color(0xFF43A047)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [BoxShadow(color: const Color(0xFF1B5E20).withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.home_work_outlined, color: Colors.white, size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Full Home Construction Calculator', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      SizedBox(height: 2),
+                      Text('All-in-one cost wizard for house construction', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    ]),
+                  ),
+                  const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
                 ]),
               ),
-            ]),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-            child: SizedBox(
-              height: 36,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: _Category.values.map((cat) {
-                  final active = _selected == cat;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selected = cat),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: active ? const Color(0xFF1B5E20) : Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: active ? const Color(0xFF1B5E20) : const Color(0xFFDDDDDD),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: _Category.values.map((cat) {
+                    final active = _selected == cat;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selected = cat),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: active ? const Color(0xFF1B5E20) : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: active ? const Color(0xFF1B5E20) : const Color(0xFFDDDDDD),
+                            ),
+                            boxShadow: active
+                                ? [BoxShadow(color: const Color(0xFF1B5E20).withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))]
+                                : [],
                           ),
-                          boxShadow: active
-                              ? [BoxShadow(color: const Color(0xFF1B5E20).withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))]
-                              : [],
-                        ),
-                        child: Text(
-                          _label(cat),
-                          style: TextStyle(
-                            color: active ? Colors.white : Colors.grey[600],
-                            fontSize: 12,
-                            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                          child: Text(
+                            _label(cat),
+                            style: TextStyle(
+                              color: active ? Colors.white : Colors.grey[600],
+                              fontSize: 12,
+                              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: GridView.builder(
+            const SizedBox(height: 6),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
@@ -147,8 +183,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               itemCount: _filtered.length,
               itemBuilder: (_, i) => _CalcCard(type: _filtered[i]),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }

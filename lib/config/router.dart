@@ -15,6 +15,7 @@ import '../screens/notifications_screen.dart';
 import '../screens/products_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/house_calculator_screen.dart';
 import '../screens/auth/change_password_screen.dart';
 
 class AppRouter {
@@ -55,8 +56,9 @@ class AppRouter {
         GoRoute(path: '/business',     builder: (_, _) => const BusinessScreen()),
         GoRoute(path: '/jobs',         builder: (_, _) => const JobsScreen()),
         GoRoute(path: '/contacts',         builder: (_, _) => const AreaContactsScreen()),
-        GoRoute(path: '/settings',         builder: (_, _) => const SettingsScreen()),
+        GoRoute(path: '/settings',          builder: (_, _) => const SettingsScreen()),
         GoRoute(path: '/change-password',  builder: (_, _) => const ChangePasswordScreen()),
+        GoRoute(path: '/house-calculator', builder: (_, _) => const HouseCalculatorScreen()),
       ],
     );
     return _instance!;

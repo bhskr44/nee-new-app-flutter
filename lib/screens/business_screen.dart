@@ -88,7 +88,7 @@ class _BusinessScreenState extends State<BusinessScreen> {
         const Text('Launch Your Construction\nBusiness Today',
             style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.3)),
         const SizedBox(height: 8),
-        const Text('Pay ₹100 consultation fee. Our admin team will contact you and track every follow-up.',
+        const Text('Pay ₹100 consultation fee. Our experts will contact you and track every follow-up.',
             style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
         const SizedBox(height: 16),
         ElevatedButton(
@@ -104,11 +104,9 @@ class _BusinessScreenState extends State<BusinessScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Row(children: [
-        _statBox('₹100', 'Consultation Fee', const Color(0xFFC62828)),
+        _statBox('₹100', 'Experts Consultation', const Color(0xFFC62828)),
         const SizedBox(width: 10),
-        _statBox('Admin', 'Follow-up Tracking', const Color(0xFF1565C0)),
-        const SizedBox(width: 10),
-        _statBox('Notes', 'Phone / Email / Office', const Color(0xFF2E7D32)),
+        _statBox('10X', 'Business Growth', const Color(0xFF2E7D32)),
       ]),
     );
   }

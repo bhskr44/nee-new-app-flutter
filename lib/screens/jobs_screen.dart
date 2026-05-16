@@ -4,6 +4,7 @@ import '../models/job_model.dart';
 import '../models/course_model.dart';
 import '../providers/job_provider.dart';
 import '../services/activity_service.dart';
+import '../services/api_service.dart';
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -206,37 +207,98 @@ class _JobCard extends StatelessWidget {
       entityName: job.title,
       extra: {'company': job.company, 'location': job.location},
     );
+
+    final nameCtrl  = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final noteCtrl  = TextEditingController();
+    bool submitting = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Apply - ${job.title}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(job.company, style: TextStyle(color: Colors.grey[600])),
-          const SizedBox(height: 16),
-          const TextField(decoration: InputDecoration(labelText: 'Full Name')),
-          const SizedBox(height: 10),
-          const TextField(keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Mobile Number')),
-          const SizedBox(height: 10),
-          const TextField(decoration: InputDecoration(labelText: 'Experience / Notes'), maxLines: 3),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Application submitted. The employer will contact you soon.'), backgroundColor: Colors.green),
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF57F17)),
-              child: const Text('Submit Application'),
-            ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Apply — ${job.title}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(job.company, style: TextStyle(color: Colors.grey[600])),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Full Name *'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Mobile Number *'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: noteCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Experience / Cover Note'),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Please enter your name and mobile number')),
+                            );
+                            return;
+                          }
+                          setModalState(() => submitting = true);
+                          try {
+                            await apiService.applyJob(job.id, {
+                              'full_name':   nameCtrl.text.trim(),
+                              'phone':       phoneCtrl.text.trim(),
+                              'cover_note':  noteCtrl.text.trim(),
+                            });
+                            if (!ctx.mounted) return;
+                            Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Application submitted! ${job.company} will contact you.'),
+                                  backgroundColor: Colors.green[700],
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          } catch (_) {
+                            setModalState(() => submitting = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(content: Text('Submission failed. Please try again.')),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF57F17),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: submitting
+                      ? const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Submit Application', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
           ),
-        ]),
+        ),
       ),
     );
   }
@@ -366,37 +428,97 @@ class _CourseCard extends StatelessWidget {
       entityName: course.name,
       extra: {'provider': course.provider, 'mode': course.mode},
     );
+
+    final nameCtrl     = TextEditingController();
+    final phoneCtrl    = TextEditingController();
+    final districtCtrl = TextEditingController();
+    bool submitting    = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Enrol - ${course.name}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(course.provider, style: TextStyle(color: Colors.grey[600])),
-          const SizedBox(height: 16),
-          const TextField(decoration: InputDecoration(labelText: 'Full Name')),
-          const SizedBox(height: 10),
-          const TextField(keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Mobile Number')),
-          const SizedBox(height: 10),
-          const TextField(decoration: InputDecoration(labelText: 'District')),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Training enquiry submitted. Our team will contact you soon.'), backgroundColor: Colors.green),
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF57F17)),
-              child: const Text('Submit Enquiry'),
-            ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Enrol — ${course.name}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(course.provider, style: TextStyle(color: Colors.grey[600])),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Full Name *'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Mobile Number *'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: districtCtrl,
+                decoration: const InputDecoration(labelText: 'District'),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Please enter your name and mobile number')),
+                            );
+                            return;
+                          }
+                          setModalState(() => submitting = true);
+                          try {
+                            await apiService.enrollCourse(course.id, {
+                              'full_name':   nameCtrl.text.trim(),
+                              'phone':       phoneCtrl.text.trim(),
+                              'district':    districtCtrl.text.trim(),
+                            });
+                            if (!ctx.mounted) return;
+                            Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Enquiry submitted! ${course.provider} will contact you soon.'),
+                                  backgroundColor: Colors.green[700],
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          } catch (_) {
+                            setModalState(() => submitting = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(content: Text('Submission failed. Please try again.')),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF57F17),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: submitting
+                      ? const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Submit Enquiry', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
           ),
-        ]),
+        ),
       ),
     );
   }
