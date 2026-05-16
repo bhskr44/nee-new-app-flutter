@@ -51,10 +51,14 @@ dependencies:
   shimmer: ^3.0.0
   badges: ^3.1.2
 
+  # Splash screen
+  flutter_native_splash: ^2.4.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.3
 
 flutter:
   uses-material-design: true

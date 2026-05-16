@@ -17,6 +17,7 @@ import '../screens/profile_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/house_calculator_screen.dart';
 import '../screens/auth/change_password_screen.dart';
+import '../screens/splash_screen.dart';
 
 class AppRouter {
   static GoRouter? _instance;
@@ -28,21 +29,30 @@ class AppRouter {
 
   static GoRouter build(AuthProvider auth) {
     _instance = GoRouter(
-      initialLocation: '/',
+      initialLocation: '/splash',
       refreshListenable: auth,
       redirect: (context, state) {
         final status = auth.status;
-        if (status == AuthStatus.unknown) return null; // still checking token
+        final onSplash = state.matchedLocation == '/splash';
+
+        // Stay on splash while auth check is in progress
+        if (status == AuthStatus.unknown) {
+          return onSplash ? null : '/splash';
+        }
 
         final isAuth = status == AuthStatus.authenticated;
         final onAuthRoute = state.matchedLocation == '/login' ||
             state.matchedLocation == '/register';
 
-        if (!isAuth && !onAuthRoute) return '/login'; // gate every route
-        if (isAuth && onAuthRoute) return '/';        // already logged in
+        // Leave splash once auth resolves
+        if (onSplash) return isAuth ? '/' : '/login';
+
+        if (!isAuth && !onAuthRoute) return '/login';
+        if (isAuth && onAuthRoute) return '/';
         return null;
       },
       routes: [
+        GoRoute(path: '/splash',       builder: (_, _) => const SplashScreen()),
         GoRoute(path: '/',             builder: (_, _) => const HomeScreen()),
         GoRoute(path: '/login',        builder: (_, _) => const LoginScreen()),
         GoRoute(path: '/register',     builder: (_, _) => const RegisterScreen()),

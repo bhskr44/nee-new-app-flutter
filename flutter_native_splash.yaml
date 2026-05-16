@@ -1,0 +1,15 @@
+flutter_native_splash:
+  color: "#E65100"
+  color_dark: "#E65100"
+
+  # Uncomment and add your logo PNG (min 200x200px) when ready:
+  image: assets/images/splash_logo.png
+  # image_dark: assets/images/splash_logo.png
+
+  android: true
+  ios: true
+  web: false
+
+  android_gravity: center
+  ios_content_mode: center
+  fullscreen: true

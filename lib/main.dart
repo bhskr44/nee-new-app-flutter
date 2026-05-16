@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -17,7 +18,10 @@ import 'services/deep_link_service.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+
+  // Keep the native splash visible until we're ready to show the Flutter UI
+  FlutterNativeSplash.preserve(widgetsBinding: binding);
 
   // Firebase — add google-services.json to android/app/ before enabling
   try {
@@ -26,6 +30,9 @@ Future<void> main() async {
   } catch (_) {
     // Firebase not configured yet — notifications disabled in dev
   }
+
+  // Dismiss native splash; the animated Flutter splash screen takes over
+  FlutterNativeSplash.remove();
 
   runApp(
     MultiProvider(
