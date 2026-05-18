@@ -68,7 +68,7 @@ Widget _drop(String label, String value, List<String> items, ValueChanged<String
     items: items.map((k) => DropdownMenuItem(
       value: k,
       child: Text(
-        rateMap != null ? '$k  •  ₹${rateMap[k]!.toStringAsFixed(0)}' : k,
+        k,
         style: const TextStyle(fontSize: 13),
         overflow: TextOverflow.ellipsis,
       ),
@@ -196,7 +196,7 @@ class _HouseWizardState extends State<_HouseWizard> {
 
   final _areaCtrl  = TextEditingController();
   int    _floors   = 1;
-  final _excavCtrl = TextEditingController(text: '5');
+  final _excavCtrl = TextEditingController(text: '1.5');
 
   String _bathroom = 'Hindware';
   String _tiles    = 'Johnson';
@@ -241,8 +241,9 @@ class _HouseWizardState extends State<_HouseWizard> {
     final brkAdj  = _brk[_bricks]!;
 
     double excAdj = 0;
-    double excD   = double.tryParse(_excavCtrl.text) ?? 5;
-    while (excD > 5) { excAdj += 40; excD--; }
+    final excD = double.tryParse(_excavCtrl.text) ?? 1.5;
+    final extraSteps = ((excD - 1.5) / 0.5).floor().clamp(0, 999);
+    excAdj = extraSteps * 50.0;
 
     final kitAdj   = _kitchen ? _mk[_quality]! : 0.0;
     final perSqft  = base + stAdj + atAdj + bathAdj + tilAdj + elAdj + pntAdj + dorAdj + cemAdj + brkAdj + excAdj + kitAdj;
@@ -302,11 +303,7 @@ class _HouseWizardState extends State<_HouseWizard> {
           border: Border.all(color: sel ? const Color(0xFF1B5E20) : Colors.grey[300]!),
           boxShadow: sel ? [BoxShadow(color: const Color(0xFF1B5E20).withAlpha(50), blurRadius: 8, offset: const Offset(0, 2))] : [],
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(q, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: sel ? Colors.white : Colors.black87)),
-          Text('₹${_bp[q]!.toStringAsFixed(0)}/sqft base', style: TextStyle(fontSize: 10, color: sel ? Colors.white70 : Colors.grey[600])),
-          Text('Slab: ₹${_rr[q]!.toStringAsFixed(0)}/sqft', style: TextStyle(fontSize: 9, color: sel ? Colors.white60 : Colors.grey[400])),
-        ]),
+        child: Text(q, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: sel ? Colors.white : Colors.black87)),
       ),
     );
   }
@@ -380,7 +377,7 @@ class _HouseWizardState extends State<_HouseWizard> {
                 ),
             ]),
             const SizedBox(height: 12),
-            _field(_excavCtrl, 'Excavation Depth in meters (default: 5)'),
+            _field(_excavCtrl, 'Excavation Depth in meters (default: 1.5)'),
           ]),
 
           _section(4, 'Material Selection', Icons.category_outlined, [

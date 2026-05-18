@@ -46,22 +46,19 @@ class _TrueCallerButtonState extends State<TrueCallerButton> {
   Future<void> _initiateTrueCaller() async {
     setState(() => _loading = true);
     try {
-      // Invoke native Android code that opens TrueCaller SDK consent screen
+      // OAuth SDK 3.x: returns authorization_code + state; backend exchanges for profile
       final result = await _channel.invokeMapMethod<String, dynamic>('getProfile');
       if (result == null) throw PlatformException(code: 'NULL_RESULT');
 
-      final phone = result['phone'] as String? ?? '';
-      final name = result['name'] as String? ?? '';
-      final accessToken = result['access_token'] as String? ?? '';
+      final authorizationCode = result['authorization_code'] as String? ?? '';
+      final state            = result['state'] as String? ?? '';
 
-      if (phone.isEmpty) throw PlatformException(code: 'NO_PHONE');
+      if (authorizationCode.isEmpty) throw PlatformException(code: 'NO_AUTH_CODE');
 
-      // Authenticate with backend using the TrueCaller-verified phone
       final auth = context.read<AuthProvider>();
       final success = await auth.loginWithTrueCaller(
-        phone: phone,
-        name: name,
-        accessToken: accessToken,
+        authorizationCode: authorizationCode,
+        state: state,
       );
 
       if (!mounted) return;

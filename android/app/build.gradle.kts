@@ -17,9 +17,9 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "in.complit.neep"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
-
+    ndkVersion = "28.2.13676358"
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -50,6 +50,9 @@ android {
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
+            ndk {
+                debugSymbolLevel = "symbol_table"
+            }
         }
     }
 }
@@ -59,5 +62,5 @@ flutter {
 }
 
 dependencies {
-    implementation("com.truecaller.android.sdk:truecaller-sdk:2.7.3")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

@@ -2,9 +2,6 @@
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
-    <uses-permission android:name="android.permission.READ_SMS"/>
-    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
@@ -14,12 +11,7 @@
         android:allowBackup="true"
         android:usesCleartextTraffic="true">
 
-        <!-- TrueCaller App Key -->
-        <meta-data
-            android:name="com.truecaller.android.sdk.APP_KEY"
-            android:value="whnhqaeph3qvsbdnpvvovjha803qgsp7zkdq1lsv7oa" />
-
-        <activity
+<activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
@@ -57,12 +49,6 @@
             </intent-filter>
         </activity>
 
-        <!-- TrueCaller SDK internal activity -->
-        <activity
-            android:name="com.truecaller.android.sdk.TrueCallerSDKActivity"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale"
-            android:exported="false"/>
-
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
@@ -74,7 +60,5 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- Allow querying TrueCaller app -->
-        <package android:name="com.truecaller"/>
     </queries>
 </manifest>

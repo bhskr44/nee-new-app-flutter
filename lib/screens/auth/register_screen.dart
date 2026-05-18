@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/phone_number_button.dart';
-import '../../widgets/truecaller_button.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -74,9 +73,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // TrueCaller one-tap register
-              TrueCallerButton(onSuccess: () => context.go('/')),
-              const SizedBox(height: 12),
               PhoneNumberButton(onSuccess: () => context.go('/')),
               const SizedBox(height: 16),
 

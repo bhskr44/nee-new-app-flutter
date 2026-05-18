@@ -130,37 +130,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Called after TrueCaller SDK returns a verified profile.
-  Future<bool> loginWithTrueCaller({
-    required String phone,
-    required String name,
-    required String accessToken,
-  }) async {
-    _loading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final data = await apiService.loginWithPhone({
-        'phone': phone,
-        'name': name,
-        'access_token': accessToken,
-        'provider': 'truecaller',
-      });
-      await StorageService.saveToken(data['token']);
-      _user = UserModel.fromJson(data['user']);
-      _status = AuthStatus.authenticated;
-      _loading = false;
-      notifyListeners();
-      return true;
-    } on Exception catch (e) {
-      _error = _parseError(e);
-      _loading = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
   Future<bool> loginWithPhoneNumber({
     required String phone,
     String? name,

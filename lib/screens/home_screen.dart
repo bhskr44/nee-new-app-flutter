@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _segments = [
     _Segment('Construction Products', Icons.construction, Color(0xFFE65100), 'Cement, Steel, Bricks & More'),
     _Segment('Construction Manpower', Icons.people_alt_outlined, Color(0xFF1565C0), 'Skilled Workers On-Demand'),
-    _Segment('Construction Leads', Icons.trending_up, Color(0xFF2E7D32), 'Buy & Sell Project Leads'),
+    _Segment('Market Place', Icons.storefront, Color(0xFF2E7D32), 'Buy & Sell Project Leads'),
     _Segment('Construction Calculator', Icons.calculate_outlined, Color(0xFF6A1B9A), 'Civil, Interior, Tiles & Paint'),
     _Segment('Funding Support', Icons.account_balance_outlined, Color(0xFF00695C), 'Loans & Govt. Schemes'),
     _Segment('Start Your Business', Icons.rocket_launch_outlined, Color(0xFFC62828), 'Launch Your Venture'),
@@ -68,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                mainAxisExtent: 168,
+                mainAxisExtent: 180,
               ),
             ),
           ),
@@ -712,7 +712,7 @@ class _OfferSliderState extends State<_OfferSlider> {
       child: Column(
         children: [
           SizedBox(
-            height: 160,
+            height: 185,
             child: PageView.builder(
               controller: _ctrl,
               itemCount: _slides.length,
