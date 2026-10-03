@@ -1,0 +1,4 @@
+# Google Play service-account key (JSON). Never commit it — it's gitignored.
+# Override the location with PLAY_STORE_JSON_KEY=/path/to/key.json.
+json_key_file(ENV["PLAY_STORE_JSON_KEY"] || File.expand_path("play-store-key.json", __dir__))
+package_name("in.complit.neep")

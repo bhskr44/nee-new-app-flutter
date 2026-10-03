@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../config/constants.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/phone_number_button.dart';
+import '../../services/api_service.dart';
+import '../../services/referral_service.dart';
+import '../../widgets/auth_page.dart';
+import 'package:flutter/services.dart';
+import '../../widgets/role_picker.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -18,15 +23,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+  final _referralCtrl = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirm = true;
+  int _step = 0;
   String _selectedRole = 'buyer';
+  bool _roleAccepted = false;
 
-  static const _roles = [
-    ('buyer', 'Buyer / Client', Icons.shopping_cart_outlined),
-    ('seller', 'Material Seller', Icons.store_outlined),
-    ('contractor', 'Contractor', Icons.engineering_outlined),
-    ('worker', 'Skilled Worker', Icons.handyman_outlined),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    ReferralService.getPendingCode().then((code) {
+      if (code != null && code.isNotEmpty && mounted) {
+        _referralCtrl.text = code;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -35,11 +47,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _phoneCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
+    _referralCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (context.read<AuthProvider>().loading ||
+        !_formKey.currentState!.validate())
+      return;
+    if (RolePicker.isTeamRole(_selectedRole) && !_roleAccepted) return;
+    FocusScope.of(context).unfocus();
+
+    // Roles requiring admin approval (Associate Partner, Telecaller, Lead
+    // Manager) are never sent as a registration role directly. Register as
+    // 'guest' instead — the account sits in guest-tier access (7-day clock,
+    // see Profile::guest_expires_at) until admin approves the actual role —
+    // then auto-file the role-change request so the user doesn't have to do
+    // it separately afterward.
+    final requiresApproval = AppConstants.roleRequiresApproval(_selectedRole);
 
     final auth = context.read<AuthProvider>();
     final success = await auth.register(
@@ -48,178 +73,290 @@ class _RegisterScreenState extends State<RegisterScreen> {
       password: _passwordCtrl.text,
       passwordConfirmation: _confirmCtrl.text,
       phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-      role: _selectedRole,
+      role: requiresApproval ? 'guest' : _selectedRole,
+      referralCode:
+          _referralCtrl.text.trim().isEmpty ? null : _referralCtrl.text.trim(),
     );
 
-    if (success && mounted) context.go('/');
+    if (!mounted) return;
+    if (success) {
+      final ref = _referralCtrl.text.trim();
+      if (ref.isNotEmpty) {
+        apiService.trackReferral(ref).ignore();
+        ReferralService.markUsed().ignore();
+      }
+      // The register() call above already stamped role_confirmed_at
+      // server-side (AuthController::register — role is always sent from
+      // this wizard's step 2), so home_screen.dart's mandatory role prompt
+      // won't ask again.
+      if (requiresApproval) {
+        try {
+          await apiService.requestRoleChange(_selectedRole);
+        } catch (_) {
+          // Account creation already succeeded — the user can still file the
+          // request later from Settings if this follow-up call failed.
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Account created! Your ${AppConstants.roleLabel(_selectedRole)} request is pending admin approval.',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      context.go('/');
+    }
+  }
+
+  void _next() {
+    if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _step = 1);
+  }
+
+  void _back() {
+    if (_step == 1) {
+      setState(() => _step = 0);
+    } else {
+      context.go('/login');
+    }
+  }
+
+  Widget _passwordField(
+    TextEditingController controller, {
+    bool confirm = false,
+  }) {
+    final hidden = confirm ? _obscureConfirm : _obscurePassword;
+    return TextFormField(
+      controller: controller,
+      obscureText: hidden,
+      autofillHints: const [AutofillHints.newPassword],
+      textInputAction: confirm ? TextInputAction.done : TextInputAction.next,
+      onFieldSubmitted: confirm ? (_) => _next() : null,
+      decoration: InputDecoration(
+        labelText: confirm ? 'Confirm password' : 'Password',
+        helperText:
+            confirm
+                ? 'Enter the same password again.'
+                : 'Use at least 8 characters.',
+        prefixIcon: const Icon(Icons.lock_outline_rounded),
+        suffixIcon: IconButton(
+          tooltip: hidden ? 'Show password' : 'Hide password',
+          onPressed:
+              () => setState(() {
+                if (confirm) {
+                  _obscureConfirm = !hidden;
+                } else {
+                  _obscurePassword = !hidden;
+                }
+              }),
+          icon: Icon(
+            hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+          ),
+        ),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty)
+          return confirm ? 'Confirm your password.' : 'Create a password.';
+        if (confirm && value != _passwordCtrl.text)
+          return 'The passwords do not match.';
+        if (!confirm && value.length < 8) return 'Use at least 8 characters.';
+        return null;
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Account'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/login'),
+    final needsAcceptance =
+        RolePicker.isTeamRole(_selectedRole) && !_roleAccepted;
+    return PopScope(
+      canPop: _step == 0 && !auth.loading,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && !auth.loading && _step == 1) _back();
+      },
+      child: AuthPage(
+        title: _step == 0 ? 'Create your account' : 'Make NEE work for you',
+        subtitle:
+            _step == 0
+                ? 'Start with your name and sign-in details.'
+                : 'Choose how you will use NEE. You can request a different role later in Settings.',
+        onBack: auth.loading ? null : _back,
+        bottomAction: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_step == 1 && needsAcceptance) ...[
+              const Text(
+                'Accept the selected role responsibilities to continue.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Color(0xFF526071)),
+              ),
+              const SizedBox(height: 8),
+            ],
+            ElevatedButton(
+              onPressed:
+                  auth.loading || (_step == 1 && needsAcceptance)
+                      ? null
+                      : _step == 0
+                      ? _next
+                      : _register,
+              child:
+                  auth.loading
+                      ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                      : Text(
+                        _step == 0 ? 'Continue to your role' : 'Create account',
+                      ),
+            ),
+          ],
         ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              PhoneNumberButton(onSuccess: () => context.go('/')),
-              const SizedBox(height: 16),
-
-              Row(children: [
-                const Expanded(child: Divider()),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('or register with email', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                ),
-                const Expanded(child: Divider()),
-              ]),
-              const SizedBox(height: 16),
-
-              if (auth.error != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Text(auth.error!, style: TextStyle(color: Colors.red.shade700, fontSize: 13)),
-                ),
-
-              // Role selector
-              Text('I am a…', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _roles.map((r) {
-                  final (value, label, icon) = r;
-                  final selected = _selectedRole == value;
-                  return ChoiceChip(
-                    avatar: Icon(icon, size: 16,
-                      color: selected ? theme.colorScheme.onPrimary : theme.colorScheme.primary),
-                    label: Text(label),
-                    selected: selected,
-                    onSelected: (_) => setState(() => _selectedRole = value),
-                    selectedColor: theme.colorScheme.primary,
-                    labelStyle: TextStyle(
-                      color: selected ? theme.colorScheme.onPrimary : null,
-                      fontWeight: selected ? FontWeight.w600 : null,
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 20),
-
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    TextFormField(
-                      controller: _nameCtrl,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Full Name *',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      validator: (v) => (v?.isEmpty ?? true) ? 'Name is required' : null,
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email *',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                      validator: (v) {
-                        if (v?.isEmpty ?? true) return 'Email is required';
-                        if (!v!.contains('@')) return 'Enter a valid email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone (optional)',
-                        prefixIcon: Icon(Icons.phone_outlined),
-                        prefixText: '+91 ',
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _passwordCtrl,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password *',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v?.isEmpty ?? true) return 'Password is required';
-                        if (v!.length < 8) return 'Minimum 8 characters';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _confirmCtrl,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Confirm Password *',
-                        prefixIcon: Icon(Icons.lock_outline),
-                      ),
-                      validator: (v) {
-                        if (v != _passwordCtrl.text) return 'Passwords do not match';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: auth.loading ? null : _register,
-                        child: auth.loading
-                            ? const SizedBox(
-                                width: 20, height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Already have an account? '),
-                  TextButton(
-                    onPressed: () => context.go('/login'),
-                    child: const Text('Sign In', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Expanded(
+                    child: Text(
+                      _step == 0 ? '1. Account details' : '2. Your role',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Text(
+                    'Step ${_step + 1} of 2',
+                    style: const TextStyle(color: Color(0xFF526071)),
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              LinearProgressIndicator(
+                value: (_step + 1) / 2,
+                minHeight: 4,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              const SizedBox(height: 24),
+              if (auth.error != null) AuthError(message: auth.error!),
+              if (_step == 0) ...[
+                TextFormField(
+                  controller: _nameCtrl,
+                  autofillHints: const [AutofillHints.name],
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Full name',
+                    hintText: 'Enter your name',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                  validator:
+                      (value) =>
+                          value == null || value.trim().isEmpty
+                              ? 'Enter your name.'
+                              : null,
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _emailCtrl,
+                  autofillHints: const [AutofillHints.email],
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Email address',
+                    hintText: 'you@example.com',
+                    prefixIcon: Icon(Icons.mail_outline_rounded),
+                  ),
+                  validator:
+                      (value) =>
+                          value == null ||
+                                  !RegExp(
+                                    r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                                  ).hasMatch(value.trim())
+                              ? 'Enter a valid email address.'
+                              : null,
+                ),
+                const SizedBox(height: 18),
+                _passwordField(_passwordCtrl),
+                const SizedBox(height: 18),
+                _passwordField(_confirmCtrl, confirm: true),
+                const SizedBox(height: 18),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text('Already have an account?'),
+                    TextButton(
+                      onPressed: () => context.go('/login'),
+                      child: const Text('Sign in'),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                AbsorbPointer(
+                  absorbing: auth.loading,
+                  child: RolePicker(
+                    selectedRole: _selectedRole,
+                    onRoleChanged:
+                        (value) => setState(() => _selectedRole = value),
+                    accepted: _roleAccepted,
+                    onAcceptedChanged:
+                        (value) => setState(() => _roleAccepted = value),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Optional details',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _phoneCtrl,
+                  enabled: !auth.loading,
+                  autofillHints: const [AutofillHints.telephoneNumberNational],
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Mobile number (optional)',
+                    prefixText: '+91 ',
+                    helperText: 'Enter your 10-digit Indian mobile number.',
+                  ),
+                  validator:
+                      (value) =>
+                          value != null &&
+                                  value.isNotEmpty &&
+                                  !RegExp(r'^[6-9][0-9]{9}$').hasMatch(value)
+                              ? 'Enter a valid 10-digit mobile number.'
+                              : null,
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _referralCtrl,
+                  enabled: !auth.loading,
+                  textCapitalization: TextCapitalization.characters,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: 'Referral code (optional)',
+                    hintText: 'e.g. NEE123',
+                    prefixIcon: Icon(Icons.redeem_rounded),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const AuthLegalLinks(),
+              ],
             ],
           ),
         ),

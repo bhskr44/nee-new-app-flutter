@@ -1,3 +1,4 @@
+import '../widgets/app_empty_state.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -31,26 +32,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           if (provider.unreadCount > 0)
             TextButton(
               onPressed: provider.markAllRead,
-              child: const Text('Mark all read', style: TextStyle(color: Colors.white)),
+              child: const Text(
+                'Mark all read',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
         ],
       ),
-      body: provider.loading
-          ? const Center(child: CircularProgressIndicator())
-          : provider.notifications.isEmpty
-              ? _EmptyNotifications()
-              : RefreshIndicator(
-                  onRefresh: provider.load,
-                  child: ListView.builder(
-                    itemCount: provider.notifications.length,
-                    itemBuilder: (context, index) {
-                      return _NotificationTile(
-                        notification: provider.notifications[index],
-                        onTap: () => provider.markRead(provider.notifications[index].id),
-                      );
-                    },
-                  ),
+      body:
+          provider.loading
+              ? const Center(child: CircularProgressIndicator())
+              : provider.notifications.isEmpty
+              ? RefreshIndicator(
+                onRefresh: provider.load,
+                child: AppEmptyState(
+                  icon: Icons.notifications_none_rounded,
+                  title:
+                      provider.error != null
+                          ? 'Could not load notifications'
+                          : 'You are all caught up',
+                  message:
+                      provider.error ??
+                      'Updates about your activity will appear here.',
+                  actionLabel: 'Refresh',
+                  onAction: provider.load,
                 ),
+              )
+              : RefreshIndicator(
+                onRefresh: provider.load,
+                child: ListView.builder(
+                  itemCount: provider.notifications.length,
+                  itemBuilder: (context, index) {
+                    return _NotificationTile(
+                      notification: provider.notifications[index],
+                      onTap:
+                          () => provider.markRead(
+                            provider.notifications[index].id,
+                          ),
+                    );
+                  },
+                ),
+              ),
     );
   }
 }
@@ -69,18 +91,24 @@ class _NotificationTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        color: isUnread ? theme.colorScheme.primary.withValues(alpha: 0.05) : null,
+        color:
+            isUnread ? theme.colorScheme.primary.withValues(alpha: 0.05) : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 44, height: 44,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: _typeColor(notification.type).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(22),
               ),
-              child: Icon(_typeIcon(notification.type), color: _typeColor(notification.type), size: 22),
+              child: Icon(
+                _typeIcon(notification.type),
+                color: _typeColor(notification.type),
+                size: 22,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -93,13 +121,15 @@ class _NotificationTile extends StatelessWidget {
                         child: Text(
                           notification.title,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
+                            fontWeight:
+                                isUnread ? FontWeight.w700 : FontWeight.w500,
                           ),
                         ),
                       ),
                       if (isUnread)
                         Container(
-                          width: 8, height: 8,
+                          width: 8,
+                          height: 8,
                           decoration: BoxDecoration(
                             color: theme.colorScheme.primary,
                             shape: BoxShape.circle,
@@ -110,14 +140,16 @@ class _NotificationTile extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     notification.body,
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     _formatDate(notification.createdAt),
-                    style: theme.textTheme.labelSmall?.copyWith(color: Colors.grey[500]),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.grey[500],
+                    ),
                   ),
                 ],
               ),
@@ -131,45 +163,30 @@ class _NotificationTile extends StatelessWidget {
   IconData _typeIcon(String type) {
     return switch (type) {
       'product' => Icons.inventory_2_outlined,
-      'lead'    => Icons.trending_up,
-      'job'     => Icons.work_outline,
-      'promo'   => Icons.local_offer_outlined,
-      _         => Icons.notifications_outlined,
+      'lead' => Icons.trending_up,
+      'job' => Icons.work_outline,
+      'promo' => Icons.local_offer_outlined,
+      _ => Icons.notifications_outlined,
     };
   }
 
   Color _typeColor(String type) {
     return switch (type) {
       'product' => Colors.blue,
-      'lead'    => Colors.green,
-      'job'     => Colors.purple,
-      'promo'   => Colors.orange,
-      _         => Colors.grey,
+      'lead' => Colors.green,
+      'job' => Colors.purple,
+      'promo' => Colors.orange,
+      _ => Colors.grey,
     };
   }
 
   String _formatDate(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     return DateFormat('dd MMM').format(dt);
-  }
-}
-
-class _EmptyNotifications extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.notifications_none, size: 64, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text('No notifications yet', style: TextStyle(color: Colors.grey[500], fontSize: 16)),
-        ],
-      ),
-    );
   }
 }

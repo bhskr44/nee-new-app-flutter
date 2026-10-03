@@ -1,3 +1,4 @@
+import '../widgets/app_empty_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,6 +14,25 @@ class AreaContactsScreen extends StatefulWidget {
 }
 
 class _AreaContactsScreenState extends State<AreaContactsScreen> {
+  bool _searching = false;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _openSearch(AreaContactProvider prov) {
+    setState(() => _searching = true);
+  }
+
+  void _closeSearch(AreaContactProvider prov) {
+    _searchCtrl.clear();
+    prov.setSearch('');
+    setState(() => _searching = false);
+  }
+
   static const _regions = [
     'All',
     'Upper Assam',
@@ -35,53 +55,108 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
   @override
   Widget build(BuildContext context) {
     return Consumer<AreaContactProvider>(
-      builder: (context, prov, _) => Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: const Text('Area Contacts'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _showSearch(context, prov),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildHero(),
-          _buildRegionFilter(prov),
-          if (prov.search.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Row(
-                children: [
-                  Text('Results for "${prov.search}"',
-                      style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic)),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => prov.setSearch(''),
-                    child: const Text('Clear',
-                        style: TextStyle(
-                            color: Color(0xFF37474F), fontSize: 12)),
+      builder:
+          (context, prov, _) => Scaffold(
+            backgroundColor: const Color(0xFFF5F5F5),
+            appBar: AppBar(
+              title:
+                  _searching
+                      ? TextField(
+                        controller: _searchCtrl,
+                        autofocus: true,
+                        style: const TextStyle(color: Colors.white),
+                        cursorColor: Colors.white,
+                        decoration: const InputDecoration(
+                          hintText: 'Search district or person name…',
+                          hintStyle: TextStyle(color: Colors.white60),
+                          border: InputBorder.none,
+                          filled: false,
+                        ),
+                        onChanged: (v) => prov.setSearch(v),
+                      )
+                      : const Text('Area Contacts'),
+              actions: [
+                if (_searching)
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => _closeSearch(prov),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () => _openSearch(prov),
                   ),
-                ],
-              ),
+              ],
             ),
-          Expanded(
-            child: prov.filtered.isEmpty && prov.loading
-                ? const Center(child: CircularProgressIndicator())
-                : prov.filtered.isEmpty
-                    ? _buildEmpty()
-                    : prov.region != 'All'
-                        ? _buildFlatList(prov.filtered)
-                        : _buildGroupedList(prov),
+            body: Column(
+              children: [
+                _buildHero(),
+                _buildRegionFilter(prov),
+                if (prov.search.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Results for "${prov.search}"',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            prov.setSearch('');
+                          },
+                          child: const Text(
+                            'Clear',
+                            style: TextStyle(
+                              color: Color(0xFF37474F),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                Expanded(
+                  child:
+                      prov.filtered.isEmpty && prov.loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : prov.filtered.isEmpty
+                          ? AppEmptyState(
+                            icon: Icons.people_outline,
+                            title:
+                                prov.error != null
+                                    ? 'Could not load contacts'
+                                    : 'No matching contacts',
+                            message:
+                                prov.error ??
+                                'Try another name, district or region.',
+                            actionLabel:
+                                prov.error != null
+                                    ? 'Try again'
+                                    : 'Clear filters',
+                            onAction: () {
+                              if (prov.error != null) {
+                                prov.fetch();
+                              } else {
+                                _searchCtrl.clear();
+                                prov.setSearch('');
+                                prov.setRegion('All');
+                              }
+                            },
+                          )
+                          : prov.region != 'All'
+                          ? _buildFlatList(prov.filtered)
+                          : _buildGroupedList(prov),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      ),
     );
   }
 
@@ -94,8 +169,8 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
           Image.network(
             'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=800&h=300&fit=crop&auto=format',
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) =>
-                const ColoredBox(color: Color(0xFF37474F)),
+            errorBuilder:
+                (_, _, _) => const ColoredBox(color: Color(0xFF37474F)),
           ),
           const DecoratedBox(
             decoration: BoxDecoration(
@@ -112,26 +187,34 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Assam District Network',
-                    style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        letterSpacing: 0.5)),
+                const Text(
+                  'Assam District Network',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                const Text('Area-Wise\nContact Persons',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        height: 1.2)),
+                const Text(
+                  'Area-Wise\nContact Persons',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2,
+                  ),
+                ),
                 const SizedBox(height: 10),
-                Row(children: [
-                  _heroPill(Icons.map, '35 Districts'),
-                  const SizedBox(width: 8),
-                  _heroPill(Icons.groups, '6 Regions'),
-                  const SizedBox(width: 8),
-                  _heroPill(Icons.phone_in_talk, 'Direct Call'),
-                ]),
+                Row(
+                  children: [
+                    _heroPill(Icons.map, '35 Districts'),
+                    const SizedBox(width: 8),
+                    _heroPill(Icons.groups, '6 Regions'),
+                    const SizedBox(width: 8),
+                    _heroPill(Icons.phone_in_talk, 'Direct Call'),
+                  ],
+                ),
               ],
             ),
           ),
@@ -148,12 +231,17 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: Colors.white, size: 12),
-          const SizedBox(width: 4),
-          Text(label,
-              style: const TextStyle(color: Colors.white, fontSize: 11)),
-        ]),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 12),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -169,8 +257,7 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
         itemBuilder: (_, i) {
           final r = _regions[i];
           final sel = r == prov.region;
-          final color =
-              _regionColors[r] ?? const Color(0xFF37474F);
+          final color = _regionColors[r] ?? const Color(0xFF37474F);
           return ChoiceChip(
             label: Text(r),
             selected: sel,
@@ -183,7 +270,8 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
             ),
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
+              borderRadius: BorderRadius.circular(20),
+            ),
           );
         },
       ),
@@ -235,11 +323,14 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(region,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
+          Text(
+            region,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -247,60 +338,16 @@ class _AreaContactsScreenState extends State<AreaContactsScreen> {
               color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Text('$count districts',
-                style: TextStyle(
-                    fontSize: 10,
-                    color: color,
-                    fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search_off, size: 56, color: Colors.grey[300]),
-          const SizedBox(height: 12),
-          Text('No contacts found',
-              style: TextStyle(color: Colors.grey[500], fontSize: 16)),
-        ],
-      ),
-    );
-  }
-
-  void _showSearch(BuildContext context, AreaContactProvider prov) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            16, 20, 16, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              autofocus: true,
-              onChanged: (v) {
-                prov.setSearch(v);
-                Navigator.pop(context);
-              },
-              decoration: InputDecoration(
-                hintText: 'Search district, name or designation...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-                fillColor: const Color(0xFFF0F0F0),
+            child: Text(
+              '$count districts',
+              style: TextStyle(
+                fontSize: 10,
+                color: color,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -319,8 +366,7 @@ class _ContactCard extends StatelessWidget {
     'Hills': Color(0xFF37474F),
   };
 
-  Color get _color =>
-      _regionColors[contact.region] ?? const Color(0xFF37474F);
+  Color get _color => _regionColors[contact.region] ?? const Color(0xFF37474F);
 
   String get _initials {
     final parts = contact.name.split(' ');
@@ -337,9 +383,10 @@ class _ContactCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Padding(
@@ -352,10 +399,7 @@ class _ContactCard extends StatelessWidget {
               height: 52,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    _color.withValues(alpha: 0.8),
-                    _color,
-                  ],
+                  colors: [_color.withValues(alpha: 0.8), _color],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -365,9 +409,10 @@ class _ContactCard extends StatelessWidget {
               child: Text(
                 _initials,
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -379,39 +424,54 @@ class _ContactCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(contact.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14)),
+                        child: Text(
+                          contact.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: _color.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text(contact.district,
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: _color,
-                                fontWeight: FontWeight.w600)),
+                        child: Text(
+                          contact.district,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: _color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(contact.designation,
-                      style: TextStyle(
-                          color: Colors.grey[600], fontSize: 12)),
+                  Text(
+                    contact.designation,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
                   const SizedBox(height: 2),
-                  Row(children: [
-                    Icon(Icons.location_on,
-                        size: 12, color: Colors.grey[400]),
-                    const SizedBox(width: 2),
-                    Text(contact.region,
-                        style: TextStyle(
-                            color: Colors.grey[500], fontSize: 11)),
-                  ]),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 12,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        contact.region,
+                        style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -419,21 +479,26 @@ class _ContactCard extends StatelessWidget {
                         icon: Icons.phone,
                         label: 'Call',
                         color: _color,
-                        onTap: () => _showContactDialog(context, whatsapp: false),
+                        onTap:
+                            () => _showContactDialog(context, whatsapp: false),
                       ),
                       const SizedBox(width: 8),
                       _ActionButton(
                         icon: Icons.chat,
                         label: 'WhatsApp',
                         color: const Color(0xFF25D366),
-                        onTap: () => _showContactDialog(context, whatsapp: true),
+                        onTap:
+                            () => _showContactDialog(context, whatsapp: true),
                       ),
                       const Spacer(),
-                      Text(contact.phone,
-                          style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 11,
-                              letterSpacing: 0.3)),
+                      Text(
+                        contact.phone,
+                        style: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 11,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -451,84 +516,117 @@ class _ContactCard extends StatelessWidget {
       entityType: 'contact',
       entityId: contact.id,
       entityName: '${contact.name} - ${contact.district}',
-      extra: {'phone': contact.phone, 'channel': whatsapp ? 'whatsapp' : 'call'},
+      extra: {
+        'phone': contact.phone,
+        'channel': whatsapp ? 'whatsapp' : 'call',
+      },
     );
     showDialog(
       context: ctx,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(contact.name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [_color.withValues(alpha: 0.8), _color],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              alignment: Alignment.center,
-              child: Text(_initials,
-                  style: const TextStyle(
+      builder:
+          (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Text(contact.name),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [_color.withValues(alpha: 0.8), _color],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _initials,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 22)),
-            ),
-            const SizedBox(height: 12),
-            Text(contact.designation,
-                style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-            Text('${contact.district} · ${contact.region}',
-                style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-            const SizedBox(height: 16),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: _color.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.phone, color: _color, size: 16),
-                  const SizedBox(width: 8),
-                  Text(contact.phone,
-                      style: TextStyle(
+                      fontSize: 22,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  contact.designation,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+                Text(
+                  '${contact.district} · ${contact.region}',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _color.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.phone, color: _color, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        contact.phone,
+                        style: TextStyle(
                           color: _color,
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
-                          letterSpacing: 0.5)),
-                ],
-              ),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final phone =
+                      whatsapp
+                          ? (contact.whatsapp ?? contact.phone)
+                          : contact.phone;
+                  final uri =
+                      whatsapp
+                          ? Uri.parse(
+                            'https://wa.me/91${phone.replaceAll(RegExp(r'[^\d]'), '')}',
+                          )
+                          : Uri(
+                            scheme: 'tel',
+                            path: phone.replaceAll(RegExp(r'[^\d+]'), ''),
+                          );
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(
+                      uri,
+                      mode:
+                          whatsapp
+                              ? LaunchMode.externalApplication
+                              : LaunchMode.platformDefault,
+                    );
+                  }
+                },
+                icon: Icon(whatsapp ? Icons.chat : Icons.phone, size: 16),
+                label: Text(whatsapp ? 'WhatsApp' : 'Call Now'),
+              ),
+            ],
           ),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final phone = whatsapp ? (contact.whatsapp ?? contact.phone) : contact.phone;
-              final uri = whatsapp
-                  ? Uri.parse('https://wa.me/91${phone.replaceAll(RegExp(r'[^\d]'), '')}')
-                  : Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^\d+]'), ''));
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: whatsapp ? LaunchMode.externalApplication : LaunchMode.platformDefault);
-              }
-            },
-            icon: Icon(whatsapp ? Icons.chat : Icons.phone, size: 16),
-            label: Text(whatsapp ? 'WhatsApp' : 'Call Now'),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -538,32 +636,38 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
-  const _ActionButton(
-      {required this.icon,
-      required this.label,
-      required this.color,
-      required this.onTap});
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: color, size: 13),
-          const SizedBox(width: 4),
-          Text(label,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 13),
+            const SizedBox(width: 4),
+            Text(
+              label,
               style: TextStyle(
-                  color: color,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600)),
-        ]),
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

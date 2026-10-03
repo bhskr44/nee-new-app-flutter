@@ -2,193 +2,101 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/auth_page.dart';
 import '../../widgets/phone_number_button.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  Widget build(BuildContext context) => AuthPage(
+    title: 'Welcome to NEE',
+    subtitle:
+        'Find construction products, skilled people and opportunities near you.',
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFE2E7ED)),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: PhoneNumberButton(onSuccess: () => context.go('/')),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'New here? Phone verification also creates your account.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12, color: Color(0xFF526071), height: 1.5),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 22),
+          child: Row(
+            children: [
+              Expanded(child: Divider()),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14),
+                child: Text('or'),
+              ),
+              Expanded(child: Divider()),
+            ],
+          ),
+        ),
+        if (AuthProvider.googleSignInAvailable) ...[
+          const _GoogleSignInButton(),
+          const SizedBox(height: 12),
+        ],
+        OutlinedButton.icon(
+          onPressed: () => context.push('/login/email'),
+          icon: const Icon(Icons.mail_outline_rounded),
+          label: const Text('Sign in with email'),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('Prefer to register with email?'),
+            TextButton(
+              onPressed: () => context.push('/register'),
+              child: const Text('Create account'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        const AuthLegalLinks(),
+      ],
+    ),
+  );
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _obscurePassword = true;
+/// The phone number is verified afterwards, on the router-driven
+/// /verify-phone screen (see AuthProvider.shouldPromptPhoneVerification).
+class _GoogleSignInButton extends StatelessWidget {
+  const _GoogleSignInButton();
 
-  @override
-  void dispose() {
-    _emailCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
-
+  Future<void> _signIn(BuildContext context) async {
     final auth = context.read<AuthProvider>();
-    final success = await auth.login(_emailCtrl.text.trim(), _passwordCtrl.text);
-
-    if (success && mounted) {
+    final ok = await auth.loginWithGoogle();
+    if (!context.mounted) return;
+    if (ok) {
       context.go('/');
+    } else if (auth.error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(auth.error!)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 40),
-              _buildLogo(theme),
-              const SizedBox(height: 40),
-              Text(
-                'Welcome Back',
-                style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Sign in to continue',
-                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-
-              PhoneNumberButton(
-                onSuccess: () => context.go('/'),
-              ),
-              const SizedBox(height: 20),
-
-              Row(children: [
-                const Expanded(child: Divider()),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('or use email', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                ),
-                const Expanded(child: Divider()),
-              ]),
-              const SizedBox(height: 20),
-
-              if (auth.error != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Text(auth.error!, style: TextStyle(color: Colors.red.shade700)),
-                ),
-
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    TextFormField(
-                      controller: _emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Email is required';
-                        if (!v.contains('@')) return 'Enter a valid email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordCtrl,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Password is required';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () => context.push('/forgot-password'),
-                        child: const Text('Forgot Password?'),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: auth.loading ? null : _login,
-                        child: auth.loading
-                            ? const SizedBox(
-                                width: 20, height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : const Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Don't have an account? "),
-                  TextButton(
-                    onPressed: () => context.go('/register'),
-                    child: const Text('Sign Up', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+    final loading = context.select<AuthProvider, bool>((a) => a.loading);
+    return OutlinedButton.icon(
+      onPressed: loading ? null : () => _signIn(context),
+      icon: const Icon(Icons.g_mobiledata_rounded, size: 28),
+      label: const Text('Continue with Google'),
     );
   }
-
-  Widget _buildLogo(ThemeData theme) {
-    return Column(
-      children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Icon(Icons.construction, color: Colors.white, size: 44),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'NEE Construction',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.primary,
-          ),
-        ),
-      ],
-    );
-  }
-
 }

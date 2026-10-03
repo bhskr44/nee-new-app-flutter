@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Truecaller Partner Key.
+        Get yours at https://developer.truecaller.com → My Apps → create app → copy key.
+        The key is tied to your package name (in.complit.neep) and signing certificate,
+        so it is safe to commit — it cannot be used by other apps.
+    -->
+    <string name="truecaller_partner_key">whnhqaeph3qvsbdnpvvovjha803qgsp7zkdq1lsv7oa</string>
+</resources>

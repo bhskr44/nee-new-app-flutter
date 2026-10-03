@@ -1,0 +1,71 @@
+{
+  "project_info": {
+    "project_number": "283161965851",
+    "project_id": "neep-12ad0",
+    "storage_bucket": "neep-12ad0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:283161965851:android:607fb8f8690daeffbb0fbe",
+        "android_client_info": {
+          "package_name": "in.complit.neep"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "283161965851-0g4rvuq1pflk2dhbr67faled063vfh21.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "in.complit.neep",
+            "certificate_hash": "0de39eca7ae973e65c795e050e0a96e951cf97b2"
+          }
+        },
+        {
+          "client_id": "283161965851-4nvvcn8edkjmkm3bdhj2c051md54ao51.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "in.complit.neep",
+            "certificate_hash": "fe9b7872252512c9fb56d3dc1e45c3dac42dc033"
+          }
+        },
+        {
+          "client_id": "283161965851-ovvsue5in976gv8te7e1cltq1pq26fc3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "in.complit.neep",
+            "certificate_hash": "541b65e7ca20190bd01677ba52d3299c32a7b627"
+          }
+        },
+        {
+          "client_id": "283161965851-98ki8t34cekff2i09d6bi5cqrdp5sv8n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpmPyDJPEfxKpWVRWTl18Q2TZ_P0_88ck"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "283161965851-98ki8t34cekff2i09d6bi5cqrdp5sv8n.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "283161965851-vdahs9emki5vjudlilhq5crde7hbleek.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "in.complit.neep",
+                "app_store_id": "6746363329"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

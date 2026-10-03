@@ -1,3 +1,5 @@
+import 'field_visit_model.dart';
+
 class LeadModel {
   final int id;
   final String title, projectType, location, status;
@@ -5,7 +7,15 @@ class LeadModel {
   final double value;
   final bool isBuy;
   final List<String> images;
+  final List<String> documents;
+  final String? youtubeUrl;
   final bool isAssignedToMe;
+  final bool isMine;
+  final bool claimedByMe;
+  final int? claimId;
+  final int claimDaysLeft;
+  final bool claimFeedbackGiven;
+  final LeadFieldVisitInfo? fieldVisit;
 
   const LeadModel({
     required this.id,
@@ -20,22 +30,46 @@ class LeadModel {
     required this.value,
     required this.isBuy,
     this.images = const [],
+    this.documents = const [],
+    this.youtubeUrl,
     this.isAssignedToMe = false,
+    this.isMine = false,
+    this.claimedByMe = false,
+    this.claimId,
+    this.claimDaysLeft = 0,
+    this.claimFeedbackGiven = false,
+    this.fieldVisit,
   });
 
-  factory LeadModel.fromJson(Map<String, dynamic> j) => LeadModel(
-        id: j['id'],
-        title: j['title'] ?? '',
-        projectType: j['project_type'] ?? '',
-        location: j['location'] ?? '',
-        status: j['status'] ?? 'open',
-        description: j['description'],
-        contact: j['contact'],
-        deadline: j['deadline'],
-        postedBy: j['user']?['name'],
-        value: (j['value'] as num).toDouble(),
-        isBuy: j['is_buy'] == true || j['is_buy'] == 1,
-        images: (j['image_urls'] as List?)?.map((e) => e.toString()).toList() ?? [],
-        isAssignedToMe: j['is_assigned_to_me'] == true,
-      );
+  factory LeadModel.fromJson(Map<String, dynamic> j) {
+    final claim = j['my_claim'] as Map<String, dynamic>?;
+    final fieldVisit = j['field_visit'] as Map<String, dynamic>?;
+    return LeadModel(
+      id: j['id'],
+      title: j['title'] ?? '',
+      projectType: j['project_type'] ?? '',
+      location: j['location'] ?? '',
+      status: j['status'] ?? 'open',
+      description: j['description'],
+      contact: j['contact'],
+      deadline: j['deadline'],
+      postedBy: j['user']?['name'],
+      value: (j['value'] as num).toDouble(),
+      isBuy: j['is_buy'] == true || j['is_buy'] == 1,
+      images: (j['image_urls'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      documents: (j['document_urls'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      youtubeUrl: j['youtube_url'],
+      isAssignedToMe: j['is_assigned_to_me'] == true,
+      isMine: j['is_mine'] == true,
+      claimedByMe: j['claimed_by_me'] == true,
+      claimId: claim?['id'],
+      claimDaysLeft: (claim?['days_left'] as num?)?.toInt() ?? 0,
+      claimFeedbackGiven: claim?['feedback_given'] == true,
+      fieldVisit: fieldVisit != null ? LeadFieldVisitInfo.fromJson(fieldVisit) : null,
+    );
+  }
+
+  /// Contact details are unlocked for own leads, dedicated (assigned) leads
+  /// and leads the user has proceeded with via a lead package.
+  bool get contactUnlocked => isMine || isAssignedToMe || claimedByMe;
 }

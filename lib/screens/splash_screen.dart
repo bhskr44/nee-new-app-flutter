@@ -67,7 +67,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                     child: const Icon(
-                      Icons.construction,
+                      Icons.rocket_launch_rounded,
                       size: 60,
                       color: Colors.white,
                     ),
@@ -87,7 +87,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'CONSTRUCTION SERVICES',
+                    'ENTREPRENEURS PLATFORM',
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 13,

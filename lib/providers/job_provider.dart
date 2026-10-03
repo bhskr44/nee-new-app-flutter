@@ -14,6 +14,10 @@ class JobProvider extends ChangeNotifier {
   int _coursePage = 1;
 
   String _jobSearch = '';
+  int _requestVersion = 0;
+  String? jobsError;
+  String? coursesError;
+  String get jobSearch => _jobSearch;
 
   List<JobModel> get jobs => _jobs;
   List<CourseModel> get courses => _courses;
@@ -22,7 +26,9 @@ class JobProvider extends ChangeNotifier {
   bool get hasMoreJobs => _hasMoreJobs;
 
   Future<void> fetchJobs({bool refresh = false}) async {
-    if (_loadingJobs) return;
+    if (_loadingJobs && !refresh) return;
+    final version = ++_requestVersion;
+    jobsError = null;
     if (refresh) {
       _jobPage = 1;
       _hasMoreJobs = true;
@@ -38,11 +44,16 @@ class JobProvider extends ChangeNotifier {
         search: _jobSearch.isEmpty ? null : _jobSearch,
         page: _jobPage,
       );
-      final items = (data['data'] as List).map((e) => JobModel.fromJson(e)).toList();
+      if (version != _requestVersion) return;
+      final items =
+          (data['data'] as List).map((e) => JobModel.fromJson(e)).toList();
       _jobs = refresh ? items : [..._jobs, ...items];
       _hasMoreJobs = data['next_page_url'] != null;
       _jobPage++;
-    } catch (_) {}
+    } catch (_) {
+      if (version != _requestVersion) return;
+      jobsError = 'Could not load jobs. Please try again.';
+    }
 
     _loadingJobs = false;
     notifyListeners();
@@ -55,21 +66,26 @@ class JobProvider extends ChangeNotifier {
       _courses = [];
     }
 
+    coursesError = null;
     _loadingCourses = true;
     notifyListeners();
 
     try {
       final data = await apiService.getCourses(page: _coursePage);
-      final items = (data['data'] as List).map((e) => CourseModel.fromJson(e)).toList();
+      final items =
+          (data['data'] as List).map((e) => CourseModel.fromJson(e)).toList();
       _courses = refresh ? items : [..._courses, ...items];
       _coursePage++;
-    } catch (_) {}
+    } catch (_) {
+      coursesError = 'Could not load training courses. Please try again.';
+    }
 
     _loadingCourses = false;
     notifyListeners();
   }
 
   void setJobSearch(String q) {
+    if (_jobSearch == q) return;
     _jobSearch = q;
     fetchJobs(refresh: true);
   }

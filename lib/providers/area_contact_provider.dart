@@ -5,6 +5,8 @@ import '../services/api_service.dart';
 class AreaContactProvider extends ChangeNotifier {
   List<AreaContactModel> _contacts = [];
   bool _loading = false;
+  String? _error;
+  String? get error => _error;
   String _region = 'All';
   String _search = '';
 
@@ -17,7 +19,8 @@ class AreaContactProvider extends ChangeNotifier {
     return _contacts.where((c) {
       final matchRegion = _region == 'All' || c.region == _region;
       final q = _search.toLowerCase();
-      final matchSearch = q.isEmpty ||
+      final matchSearch =
+          q.isEmpty ||
           c.name.toLowerCase().contains(q) ||
           c.district.toLowerCase().contains(q) ||
           c.designation.toLowerCase().contains(q);
@@ -35,12 +38,16 @@ class AreaContactProvider extends ChangeNotifier {
 
   Future<void> fetch() async {
     if (_loading) return;
+    _error = null;
     _loading = true;
     notifyListeners();
     try {
       final data = await apiService.getAreaContacts();
       _contacts = data.map((e) => AreaContactModel.fromJson(e)).toList();
-    } catch (_) {}
+    } catch (_) {
+      _error =
+          'Could not load area contacts. Check your connection and try again.';
+    }
     _loading = false;
     notifyListeners();
   }

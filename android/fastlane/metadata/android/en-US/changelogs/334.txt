@@ -1,0 +1,1 @@
+Fixed location detection on some phones (including OPPO). You can now enter your address manually if location can't be found, and the app tells you when there's no internet.

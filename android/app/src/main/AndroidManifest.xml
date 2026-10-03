@@ -3,9 +3,13 @@
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <application
-        android:label="NEE Construction"
+        android:label="NEE Platform"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:allowBackup="true"
@@ -39,7 +43,15 @@
                 <data android:scheme="neeconstruction" android:host="app"/>
             </intent-filter>
 
-            <!-- App Links: https://neeconstruction.com/app/... -->
+            <!-- App Links: https://admin.neeservice.in/app/... (primary share domain) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="admin.neeservice.in" android:pathPrefix="/app"/>
+            </intent-filter>
+
+            <!-- App Links: https://neeconstruction.com/app/... (fallback domain) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -52,13 +64,47 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
+
+        <!-- FCM notifications shown while the app is fully killed bypass our
+             Dart foreground handler and use these directly — without them,
+             Android falls back to the launcher icon, which renders as a
+             solid white blob in the status bar (that icon is full-color,
+             not the flat white silhouette the status bar requires). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_stat_notify"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color"/>
+
+        <!-- Truecaller SDK client id (OAuth SDK 3.x) -->
+        <meta-data
+            android:name="com.truecaller.android.sdk.ClientId"
+            android:value="@string/truecaller_partner_key"/>
     </application>
 
     <!-- Required for text processing plugin -->
+    <!-- Required for url_launcher on Android 11+ (package visibility) -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Open HTTPS/HTTP links (documents, YouTube, external URLs) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+        <!-- Phone dialer -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <!-- Truecaller: needed on Android 11+ to check if Truecaller is installed -->
+        <package android:name="com.truecaller"/>
     </queries>
 </manifest>

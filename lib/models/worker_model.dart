@@ -2,10 +2,11 @@ class WorkerModel {
   final int id;
   final String trade, location, phone, experience;
   final double dailyRate;
+  final String rateUnit;
   final double? rating;
   final bool available, isVerified;
   final List<String> skills;
-  final String? bio, userName;
+  final String? bio, userName, youtubeUrl;
 
   const WorkerModel({
     required this.id,
@@ -14,13 +15,17 @@ class WorkerModel {
     required this.phone,
     required this.experience,
     required this.dailyRate,
+    this.rateUnit = '/day',
     this.rating,
     required this.available,
     required this.isVerified,
     required this.skills,
     this.bio,
     this.userName,
+    this.youtubeUrl,
   });
+
+  String get rateLabel => '₹${dailyRate.toStringAsFixed(0)}$rateUnit';
 
   factory WorkerModel.fromJson(Map<String, dynamic> j) => WorkerModel(
         id: j['id'],
@@ -29,11 +34,13 @@ class WorkerModel {
         phone: j['phone'] ?? '',
         experience: j['experience'] ?? '',
         dailyRate: (j['daily_rate'] as num).toDouble(),
+        rateUnit: j['rate_unit'] as String? ?? '/day',
         rating: j['rating'] != null ? (j['rating'] as num).toDouble() : null,
         available: j['available'] == true || j['available'] == 1,
         isVerified: j['is_verified'] == true || j['is_verified'] == 1,
         skills: (j['skills'] as List?)?.map((e) => e.toString()).toList() ?? [],
         bio: j['bio'],
         userName: j['user']?['name'],
+        youtubeUrl: j['youtube_url'],
       );
 }

@@ -19,7 +19,7 @@ class NotificationService {
   static const _androidChannel = AndroidNotificationChannel(
     'nee_high_importance',
     'NEE Notifications',
-    description: 'NEE Construction app notifications',
+    description: 'NEE Platform app notifications',
     importance: Importance.max,
     playSound: true,
   );
@@ -27,10 +27,20 @@ class NotificationService {
   Future<void> initialize() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
-    await _requestPermissions();
+    // Must run before _requestPermissions() — the Android permission request
+    // goes through the local-notifications plugin, which needs to already be
+    // initialized before its platform-specific implementation is resolvable.
     await _setupLocalNotifications();
+    await _requestPermissions();
     await _setupForegroundListener();
     await _registerToken();
+
+    // Broadcasts (new lead/product/business/community post) go out over this
+    // topic — without subscribing, sendBroadcast() on the backend reaches no
+    // one, since a topic send only delivers to devices that opted in.
+    try {
+      await subscribeToTopic('all');
+    } catch (_) {}
   }
 
   Future<void> _requestPermissions() async {
@@ -41,11 +51,24 @@ class NotificationService {
         sound: true,
         provisional: false,
       );
+    } else if (Platform.isAndroid) {
+      // FirebaseMessaging.requestPermission() only *reads* status on Android —
+      // it never shows the OS's POST_NOTIFICATIONS prompt (required on API 33+).
+      // This is the actual call that triggers it.
+      final androidPlugin =
+          _localNotifications
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
+      await androidPlugin?.requestNotificationsPermission();
     }
   }
 
   Future<void> _setupLocalNotifications() async {
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // A flat white silhouette, not the full-color app icon — Android tints
+    // status-bar icons using their alpha channel, so a solid-background
+    // launcher icon renders as an unrecognizable white blob there.
+    const android = AndroidInitializationSettings('@mipmap/ic_stat_notify');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -57,8 +80,11 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    final androidPlugin = _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin =
+        _localNotifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
     await androidPlugin?.createNotificationChannel(_androidChannel);
   }
 
@@ -82,7 +108,10 @@ class NotificationService {
             channelDescription: _androidChannel.description,
             importance: Importance.max,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@mipmap/ic_stat_notify',
+            largeIcon: const DrawableResourceAndroidBitmap(
+              '@mipmap/ic_launcher',
+            ),
           ),
           iOS: const DarwinNotificationDetails(
             presentAlert: true,
@@ -94,11 +123,12 @@ class NotificationService {
       );
     });
 
-    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
   }
 
   Future<void> _registerToken() async {

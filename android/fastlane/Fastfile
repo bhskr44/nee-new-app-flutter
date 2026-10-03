@@ -1,0 +1,172 @@
+default_platform(:android)
+
+# Flutter project root (this file lives in android/fastlane/).
+FLUTTER_ROOT = File.expand_path("../..", __dir__)
+AAB_PATH = File.join(FLUTTER_ROOT, "build/app/outputs/bundle/release/app-release.aab")
+MAPPING_PATH = File.join(FLUTTER_ROOT, "build/app/outputs/mapping/release/mapping.txt")
+PLAY_TRACKS = %w[internal alpha beta production].freeze
+
+platform :android do
+  desc "Check the Play Store service-account key works"
+  lane :check do
+    validate_play_store_json_key
+  end
+
+  desc "Build a signed release app bundle (no upload)"
+  lane :build do
+    build_bundle(nil, nil)
+  end
+
+  desc "Build and upload to the Internal testing track"
+  desc "Options: notes:\"What's new text\""
+  lane :internal do |options|
+    release_to("internal", options)
+  end
+
+  desc "Build and upload to Production (bumps version patch, e.g. 3.3.3 -> 3.3.4)"
+  desc "Options: notes:\"What's new text\" rollout:0.2 (staged rollout fraction, default full) force:true (skip the confirmation prompt)"
+  lane :production do |options|
+    unless options[:force] || UI.confirm("Upload a new build straight to PRODUCTION?")
+      UI.user_error!("Aborted")
+    end
+    release_to("production", options)
+  end
+
+  desc "Push a Shorebird code-push patch to already-installed apps (no Play Store review)"
+  desc "Dart-only changes; native changes (plugins, permissions, Gradle) still need `internal`/`production`"
+  desc "Options: release:\"3.3.5+335\" (default: the version in pubspec.yaml, i.e. the last store upload) staging:true (testers only, promote later)"
+  lane :patch do |options|
+    unless options[:force] || UI.confirm("Push a code-push patch to every installed #{options[:release] || pubspec_full_version} app?")
+      UI.user_error!("Aborted")
+    end
+    cmd = "#{shorebird_cmd} patch android --no-confirm --release-version=#{options[:release] || pubspec_full_version}"
+    cmd += " --track=staging" if options[:staging]
+    Dir.chdir(FLUTTER_ROOT) { sh(cmd) }
+  end
+
+  desc "Promote the latest Internal build to Production without rebuilding"
+  desc "Options: rollout:0.2 (staged rollout fraction, default full) force:true (skip the confirmation prompt)"
+  lane :promote do |options|
+    code = google_play_track_version_codes(track: "internal").max
+    UI.user_error!("Nothing on the internal track to promote") unless code
+    unless options[:force] || UI.confirm("Promote build #{code} from internal to PRODUCTION?")
+      UI.user_error!("Aborted")
+    end
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+      version_code: code,
+      **rollout_params(options[:rollout]),
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+end
+
+# --- helpers ---------------------------------------------------------------
+
+def release_to(track, options)
+  code = next_version_code
+  # Every production release gets a new user-visible version (patch + 1):
+  # app_version_service.dart's force-update compares the version *name*, so
+  # two releases sharing one name couldn't be told apart there.
+  name = track == "production" ? bump_patch(pubspec_version_name) : nil
+  # Built with Shorebird so this store release can later receive code-push
+  # patches (see the `patch` lane) without another Play Store upload.
+  build_bundle(code, name, shorebird: true)
+  write_changelog(code, options[:notes]) if options[:notes]
+  upload_to_play_store(
+    track: track,
+    aab: AAB_PATH,
+    mapping: File.exist?(MAPPING_PATH) ? MAPPING_PATH : nil,
+    **(track == "production" ? rollout_params(options[:rollout]) : { release_status: "completed" }),
+    skip_upload_apk: true,
+    skip_upload_metadata: true,
+    skip_upload_images: true,
+    skip_upload_screenshots: true,
+    skip_upload_changelogs: options[:notes].nil?
+  )
+  # Only persist the new version once Play has accepted it, so a failed build
+  # or upload doesn't burn a version number.
+  write_pubspec_version(name || pubspec_version_name, code)
+  UI.success("Uploaded #{name || pubspec_version_name} (#{code}) to #{track}; pubspec.yaml updated")
+end
+
+def pubspec_path
+  File.join(FLUTTER_ROOT, "pubspec.yaml")
+end
+
+def pubspec_version_name
+  File.read(pubspec_path)[/^version:\s*([^+\s]+)/, 1] || UI.user_error!("No version in pubspec.yaml")
+end
+
+# Path to the Shorebird CLI, and makes sure SHOREBIRD_TOKEN is set. Works even
+# in a terminal opened before Shorebird was installed: falls back to the
+# default install dir and to the token saved as a Windows user env var.
+def shorebird_cmd
+  if ENV["SHOREBIRD_TOKEN"].to_s.empty? && Gem.win_platform?
+    out = `reg query HKCU\\Environment /v SHOREBIRD_TOKEN 2>nul`
+    token = out[/SHOREBIRD_TOKEN\s+REG_\w+\s+(\S+)/, 1]
+    ENV["SHOREBIRD_TOKEN"] = token if token
+  end
+
+  exe = Gem.win_platform? ? "shorebird.bat" : "shorebird"
+  default = File.join(Dir.home, ".shorebird", "bin", exe)
+  on_path = ENV["PATH"].to_s.split(File::PATH_SEPARATOR).any? { |d| File.exist?(File.join(d, exe)) }
+  return "shorebird" if on_path
+  UI.user_error!("Shorebird CLI not found — install it from https://shorebird.dev") unless File.exist?(default)
+  "\"#{default}\""
+end
+
+# "3.3.5+335" — how Shorebird identifies a release.
+def pubspec_full_version
+  File.read(pubspec_path)[/^version:\s*(\S+)/, 1] || UI.user_error!("No version in pubspec.yaml")
+end
+
+def bump_patch(name)
+  parts = name.split(".").map(&:to_i)
+  parts[-1] += 1
+  parts.join(".")
+end
+
+def write_pubspec_version(name, code)
+  text = File.read(pubspec_path)
+  File.write(pubspec_path, text.sub(/^version:.*$/, "version: #{name}+#{code}"))
+end
+
+# The build number (versionCode) must beat every code already on Play, on any
+# track, or the upload is rejected. Takes whichever is higher: the +N in
+# pubspec.yaml, or (highest on Play) + 1.
+def next_version_code
+  local = File.read(pubspec_path)[/^version:\s*[^+\s]+\+(\d+)/, 1].to_i
+  remote = PLAY_TRACKS.flat_map do |track|
+    google_play_track_version_codes(track: track)
+  rescue StandardError
+    [] # track has never been used
+  end.max.to_i
+  [local, remote + 1].max
+end
+
+def build_bundle(build_number, build_name = nil, shorebird: false)
+  cmd = shorebird ? "#{shorebird_cmd} release android --no-confirm" : "flutter build appbundle --release"
+  cmd += " --build-number=#{build_number}" if build_number
+  cmd += " --build-name=#{build_name}" if build_name
+  Dir.chdir(FLUTTER_ROOT) { sh(cmd) }
+  UI.user_error!("No bundle at #{AAB_PATH}") unless File.exist?(AAB_PATH)
+end
+
+def write_changelog(code, notes)
+  dir = File.join(__dir__, "metadata/android/en-US/changelogs")
+  FileUtils.mkdir_p(dir)
+  File.write(File.join(dir, "#{code}.txt"), notes)
+end
+
+# Staged rollout (< 1.0) must be released as "inProgress"; full as "completed".
+def rollout_params(rollout)
+  return { release_status: "completed" } if rollout.nil? || rollout.to_f >= 1
+  { release_status: "inProgress", rollout: rollout.to_s }
+end

@@ -6,12 +6,16 @@ class NotificationProvider extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
   int _unreadCount = 0;
   bool _loading = false;
+  String? _error;
+  String? get error => _error;
 
   List<NotificationModel> get notifications => _notifications;
   int get unreadCount => _unreadCount;
   bool get loading => _loading;
 
   Future<void> load() async {
+    if (_loading) return;
+    _error = null;
     _loading = true;
     notifyListeners();
 
@@ -19,7 +23,10 @@ class NotificationProvider extends ChangeNotifier {
       final res = await apiService.getNotifications();
       final List data = res['data'] ?? [];
       _notifications = data.map((e) => NotificationModel.fromJson(e)).toList();
-    } catch (_) {}
+    } catch (_) {
+      _error =
+          'Could not load notifications. Check your connection and try again.';
+    }
 
     _loading = false;
     notifyListeners();
@@ -56,17 +63,20 @@ class NotificationProvider extends ChangeNotifier {
   Future<void> markAllRead() async {
     try {
       await apiService.markAllNotificationsRead();
-      _notifications = _notifications
-          .map((n) => NotificationModel(
-                id: n.id,
-                title: n.title,
-                body: n.body,
-                type: n.type,
-                data: n.data,
-                isRead: true,
-                createdAt: n.createdAt,
-              ))
-          .toList();
+      _notifications =
+          _notifications
+              .map(
+                (n) => NotificationModel(
+                  id: n.id,
+                  title: n.title,
+                  body: n.body,
+                  type: n.type,
+                  data: n.data,
+                  isRead: true,
+                  createdAt: n.createdAt,
+                ),
+              )
+              .toList();
       _unreadCount = 0;
       notifyListeners();
     } catch (_) {}

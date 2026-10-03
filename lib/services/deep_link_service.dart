@@ -28,7 +28,13 @@ class DeepLinkService {
     if (_router == null) return;
 
     final path = uri.path;
-    final segments = path.split('/').where((s) => s.isNotEmpty).toList();
+    var segments = path.split('/').where((s) => s.isNotEmpty).toList();
+
+    // Web URLs have an /app/ prefix (e.g. https://admin.neeservice.in/app/products/1).
+    // Strip it so the rest of the routing is scheme-agnostic.
+    if (segments.isNotEmpty && segments[0] == 'app') {
+      segments = segments.sublist(1);
+    }
 
     if (segments.isEmpty) {
       _router!.go('/');
