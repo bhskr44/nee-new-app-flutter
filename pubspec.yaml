@@ -1,7 +1,7 @@
 name: nee_construction_app
 description: "NEE Platform - Complete Construction Platform for Assam"
 publish_to: 'none'
-version: 3.3.5+335
+version: 3.3.6+336
 
 environment:
   sdk: ^3.7.0

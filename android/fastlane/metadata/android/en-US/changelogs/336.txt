@@ -1,0 +1,1 @@
+Sign in with Google, fixed location detection during sign-up, and bug fixes.
