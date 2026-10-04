@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../config/constants.dart';
 import '../providers/auth_provider.dart';
 
 /// Shown once right after registration/first login, before the user reaches
@@ -15,18 +14,19 @@ import '../providers/auth_provider.dart';
 /// (AuthController falls back to "User 1234"), so this is the first
 /// guaranteed checkpoint for every signup path, not just a location step.
 ///
-/// Location capture is either automatic (GPS + Google Geocoding reverse
-/// lookup) or via Places Autocomplete search. Autocomplete/Details use the
-/// New Places API (places.googleapis.com/v1) — the legacy endpoints
-/// (maps.googleapis.com/maps/api/place/*) are REQUEST_DENIED on this
-/// project's API key. Reverse geocoding still goes through the classic
-/// Geocoding API, a separate product from Places that must be enabled (and
-/// added to the key's API restrictions) on the same Google Cloud project.
+/// Location capture is either automatic (GPS + reverse lookup) or via
+/// search, all on OpenStreetMap — free and keyless (Google Maps was dropped
+/// when billing lapsed on its Cloud project):
+///  - Search-as-you-type uses Photon (photon.komoot.io), which is built for
+///    autocomplete; Nominatim's usage policy forbids that.
+///  - GPS fixes, picked suggestions and typed addresses go through Nominatim
+///    (nominatim.openstreetmap.org), whose address breakdown carries the
+///    district (state_district) that Photon lacks.
 ///
-/// Once a location resolves, its address_components are broken out into the
-/// same city/area/district/state/country/pincode fields the rest of the app
+/// Once a location resolves, its address is broken out into the same
+/// city/area/district/state/country/pincode fields the rest of the app
 /// already uses (profile_screen.dart edits city/district directly) — shown
-/// editable since Google's data can be imprecise for rural/village addresses.
+/// editable since map data can be imprecise for rural/village addresses.
 class OnboardingLocationScreen extends StatefulWidget {
   const OnboardingLocationScreen({super.key});
 
@@ -37,7 +37,6 @@ class OnboardingLocationScreen extends StatefulWidget {
 
 class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
   static const _primary = Color(0xFFE65100);
-  static const _placesBase = 'https://places.googleapis.com/v1';
   final _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 15),
@@ -69,7 +68,6 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
   String? _resolvedAddress;
   double? _lat;
   double? _lng;
-  String? _placeId;
 
   // Manual entry: shown after GPS fails, or on request. Coordinates come from
   // [_gpsFix] if GPS worked but reverse geocoding didn't, else from
@@ -100,43 +98,6 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
     _countryCtrl.dispose();
     _pincodeCtrl.dispose();
     super.dispose();
-  }
-
-  /// Normalizes address components from either Google API into
-  /// {type -> longest matching text} and fills the breakdown controllers.
-  /// Assam addresses commonly carry both administrative_area_level_2 (a
-  /// "Division", e.g. "Lower Assam Division") and _level_3 (the actual
-  /// district, e.g. "Kamrup Metropolitan") — level_3 wins when present since
-  /// that matches what the rest of the app means by "district" (see
-  /// coverage_districts_screen.dart's "e.g. Kamrup").
-  void _applyAddressComponents(
-    List<dynamic> components, {
-    required bool isNewPlacesFormat,
-  }) {
-    String? pick(List<String> types) {
-      for (final type in types) {
-        for (final c in components) {
-          final componentTypes = (c['types'] as List).cast<String>();
-          if (componentTypes.contains(type)) {
-            return isNewPlacesFormat
-                ? c['longText'] as String?
-                : c['long_name'] as String?;
-          }
-        }
-      }
-      return null;
-    }
-
-    final city = pick(['locality']);
-    final area = pick(['sublocality_level_1', 'sublocality', 'neighborhood']);
-    _cityCtrl.text = city ?? area ?? '';
-    _areaCtrl.text = (area != null && area != _cityCtrl.text) ? area : '';
-    _districtCtrl.text =
-        pick(['administrative_area_level_3', 'administrative_area_level_2']) ??
-        '';
-    _stateCtrl.text = pick(['administrative_area_level_1']) ?? '';
-    _countryCtrl.text = pick(['country']) ?? 'India';
-    _pincodeCtrl.text = pick(['postal_code']) ?? '';
   }
 
   Future<void> _useCurrentLocation() async {
@@ -175,58 +136,26 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
       // Keep the raw fix: if the address lookup below fails, manual entry
       // can still save these coordinates instead of geocoding the typed text.
       _gpsFix = position;
-      final res = await _dio.get(
-        'https://maps.googleapis.com/maps/api/geocode/json',
-        queryParameters: {
-          'latlng': '${position.latitude},${position.longitude}',
-          'key': AppConstants.googlePlacesApiKey,
-        },
+      final osm = await _nominatimReverse(
+        position.latitude,
+        position.longitude,
       );
-
-      final status = res.data['status'] as String?;
-      if (status != 'OK') {
-        // Coordinates were found fine (GPS worked) but Google's reverse
-        // geocoding didn't (e.g. REQUEST_DENIED when billing lapses on the
-        // Cloud project) — try OpenStreetMap before giving up. Never present
-        // raw lat/lng as if it were an address; if both fail, tell the user
-        // plainly and ask them to type it in instead.
-        final osm = await _nominatimReverse(position);
-        if (!mounted) return;
-        if (osm == null) {
-          _gpsFailed("Found your position but couldn't look up the address.");
-          return;
-        }
-        setState(() {
-          _lat = position.latitude;
-          _lng = position.longitude;
-          _resolvedAddress = osm.formatted;
-          _placeId = null;
-          _applyNominatimAddress(osm.address);
-          _locating = false;
-          _suggestions = [];
-          _searchCtrl.text = osm.formatted;
-          _manual = false;
-          _manualNotice = null;
-        });
+      if (!mounted) return;
+      if (osm == null) {
+        // Coordinates were found fine (GPS worked) but the address lookup
+        // didn't. Never present raw lat/lng as if it were an address; tell
+        // the user plainly and ask them to type it in instead.
+        _gpsFailed("Found your position but couldn't look up the address.");
         return;
       }
-
-      final result = (res.data['results'] as List).first;
-      final formatted = result['formatted_address'] as String?;
-
-      if (!mounted) return;
       setState(() {
         _lat = position.latitude;
         _lng = position.longitude;
-        _resolvedAddress = formatted;
-        _placeId = result['place_id'] as String?;
-        _applyAddressComponents(
-          result['address_components'] as List,
-          isNewPlacesFormat: false,
-        );
+        _resolvedAddress = osm.formatted;
+        _applyNominatimAddress(osm.address);
         _locating = false;
         _suggestions = [];
-        _searchCtrl.text = formatted ?? '';
+        _searchCtrl.text = osm.formatted;
         _manual = false;
         _manualNotice = null;
       });
@@ -250,7 +179,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
 
   /// Any GPS failure drops straight into manual entry — some devices (notably
   /// OPPO/ColorOS) never produce a fix no matter what we try, and search alone
-  /// isn't enough for villages Google doesn't know by name.
+  /// isn't enough for villages the map doesn't know by name.
   void _gpsFailed(String reason) {
     setState(() {
       _locating = false;
@@ -268,7 +197,6 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
     _resolvedAddress = null;
     _lat = null;
     _lng = null;
-    _placeId = null;
     _searchCtrl.clear();
     if (_stateCtrl.text.trim().isEmpty) _stateCtrl.text = 'Assam';
     if (_countryCtrl.text.trim().isEmpty) _countryCtrl.text = 'India';
@@ -281,34 +209,12 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
 
   /// Forward-geocodes the typed address, falling back to the PIN code alone
   /// (always resolvable in India even when a village name isn't). Returns
-  /// null if Google can't place either; rethrows when the device is offline
-  /// so the caller can say so instead of silently saving without coordinates.
+  /// null if OpenStreetMap can't place either; rethrows when the device is
+  /// offline so the caller can say so instead of silently saving without
+  /// coordinates.
   Future<({double lat, double lng})?> _geocodeManualAddress(
     String address,
   ) async {
-    for (final query in [address, '${_pincodeCtrl.text.trim()}, India']) {
-      try {
-        final res = await _dio.get(
-          'https://maps.googleapis.com/maps/api/geocode/json',
-          queryParameters: {
-            'address': query,
-            'components': 'country:IN',
-            'key': AppConstants.googlePlacesApiKey,
-          },
-        );
-        if (res.data['status'] != 'OK') continue;
-        final loc = (res.data['results'] as List).first['geometry']['location'];
-        return (
-          lat: (loc['lat'] as num).toDouble(),
-          lng: (loc['lng'] as num).toDouble(),
-        );
-      } catch (e) {
-        if (_isOffline(e)) rethrow;
-        // Otherwise try the next, coarser query.
-      }
-    }
-    // Google couldn't place it (or is refusing requests) — same two queries
-    // against OpenStreetMap.
     for (final query in [address, '${_pincodeCtrl.text.trim()}, India']) {
       try {
         final res = await _dio.get(
@@ -319,7 +225,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
             'format': 'jsonv2',
             'limit': 1,
           },
-          options: Options(headers: _nominatimHeaders),
+          options: Options(headers: _osmHeaders),
         );
         final results = res.data as List;
         if (results.isEmpty) continue;
@@ -329,48 +235,56 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
         );
       } catch (e) {
         if (_isOffline(e)) rethrow;
+        // Otherwise try the next, coarser query.
       }
     }
     return null;
   }
 
-  /// OpenStreetMap fallback for when Google Geocoding is unavailable. Free,
-  /// no key; the usage policy asks for an identifying User-Agent and at most
-  /// ~1 request/second, which a once-per-signup lookup is well within.
+  /// Free and keyless; both public instances ask for an identifying
+  /// User-Agent, and Nominatim for at most ~1 request/second — a
+  /// once-per-signup lookup is well within that.
   static const _nominatimBase = 'https://nominatim.openstreetmap.org';
-  static const _nominatimHeaders = {
+  static const _photonBase = 'https://photon.komoot.io';
+  static const _osmHeaders = {
     'User-Agent': 'NEE-App/1.0 (in.complit.neep)',
     'Accept-Language': 'en',
   };
 
+  /// Address for a point. Returns null if OpenStreetMap has nothing there;
+  /// rethrows offline errors so callers can say so.
   Future<({String formatted, Map<String, dynamic> address})?> _nominatimReverse(
-    Position position,
-  ) async {
+    double lat,
+    double lng, {
+    int zoom = 18,
+  }) async {
     try {
       final res = await _dio.get(
         '$_nominatimBase/reverse',
         queryParameters: {
-          'lat': position.latitude,
-          'lon': position.longitude,
+          'lat': lat,
+          'lon': lng,
           'format': 'jsonv2',
           'addressdetails': 1,
-          'zoom': 18,
+          'zoom': zoom,
         },
-        options: Options(headers: _nominatimHeaders),
+        options: Options(headers: _osmHeaders),
       );
       final formatted = res.data['display_name'] as String?;
       final address = res.data['address'];
       if (formatted == null || address is! Map) return null;
       return (formatted: formatted, address: address.cast<String, dynamic>());
-    } catch (_) {
+    } catch (e) {
+      if (_isOffline(e)) rethrow;
       return null;
     }
   }
 
-  /// Nominatim's equivalent of [_applyAddressComponents]. For Assam,
+  /// Fills the breakdown controllers from a Nominatim address. For Assam,
   /// state_district carries the actual district (e.g. "Kamrup Metropolitan")
-  /// and county the revenue circle, so state_district wins. Called inside
-  /// setState.
+  /// — what the rest of the app means by "district" (see
+  /// coverage_districts_screen.dart's "e.g. Kamrup") — and county only the
+  /// revenue circle, so state_district wins. Called inside setState.
   void _applyNominatimAddress(Map<String, dynamic> a) {
     String? pick(List<String> keys) {
       for (final k in keys) {
@@ -391,7 +305,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
   }
 
   /// No network route at all (airplane mode, no data, DNS failure) as
-  /// opposed to Google answering with an error.
+  /// opposed to the server answering with an error.
   static bool _isOffline(Object e) =>
       e is DioException &&
       (e.type == DioExceptionType.connectionError ||
@@ -457,7 +371,6 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
       _resolvedAddress = null;
       _lat = null;
       _lng = null;
-      _placeId = null;
       _error = null;
       _searched = false;
       _searching = value.trim().length >= 3;
@@ -471,32 +384,29 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
 
   Future<void> _fetchSuggestions(String input, int version) async {
     try {
-      final res = await _dio.post(
-        '$_placesBase/places:autocomplete',
-        data: {
-          'input': input,
-          'includedRegionCodes': ['in'],
+      // bbox keeps results to India; lat/lon biases ranking toward Assam
+      // (most users) without excluding the rest of the country.
+      final res = await _dio.get(
+        '$_photonBase/api/',
+        queryParameters: {
+          'q': input,
+          'limit': 8,
+          'lang': 'en',
+          'bbox': '68,6,98,37',
+          'lat': 26.2,
+          'lon': 91.7,
         },
-        options: Options(
-          contentType: 'application/json',
-          headers: {'X-Goog-Api-Key': AppConstants.googlePlacesApiKey},
-        ),
+        options: Options(headers: _osmHeaders),
       );
       if (!mounted || version != _searchVersion) return;
-      final suggestions = (res.data['suggestions'] as List?) ?? [];
+      final features = (res.data['features'] as List?) ?? [];
       setState(() {
         _searching = false;
         _searched = true;
         _suggestions =
-            suggestions
-                .map((s) => s['placePrediction'])
-                .where((p) => p != null)
-                .map(
-                  (p) => _PlaceSuggestion(
-                    placeId: p['placeId'] as String,
-                    description: p['text']?['text'] as String? ?? '',
-                  ),
-                )
+            features
+                .map((f) => _PlaceSuggestion.fromPhoton(f as Map))
+                .whereType<_PlaceSuggestion>()
                 .toList();
       });
     } catch (e) {
@@ -524,26 +434,36 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
       _searchCtrl.text = suggestion.description;
     });
     try {
-      final res = await _dio.get(
-        '$_placesBase/places/${suggestion.placeId}',
-        options: Options(
-          headers: {
-            'X-Goog-Api-Key': AppConstants.googlePlacesApiKey,
-            'X-Goog-FieldMask': 'location,formattedAddress,addressComponents',
-          },
-        ),
+      // Photon has no district, so look the point up on Nominatim at
+      // city-level zoom (a street-level lookup of a town's centre point
+      // would pick up some arbitrary nearby building's road/suburb).
+      final osm = await _nominatimReverse(
+        suggestion.lat,
+        suggestion.lng,
+        zoom: 10,
       );
-      final location = res.data['location'];
       if (!mounted) return;
+      final p = suggestion.props;
+      String? s(String k) {
+        final v = p[k];
+        return v is String && v.trim().isNotEmpty ? v : null;
+      }
+
       setState(() {
-        _lat = (location?['latitude'] as num?)?.toDouble();
-        _lng = (location?['longitude'] as num?)?.toDouble();
-        _resolvedAddress =
-            res.data['formattedAddress'] as String? ?? suggestion.description;
-        _placeId = suggestion.placeId;
-        final components = res.data['addressComponents'] as List?;
-        if (components != null) {
-          _applyAddressComponents(components, isNewPlacesFormat: true);
+        _lat = suggestion.lat;
+        _lng = suggestion.lng;
+        _resolvedAddress = suggestion.description;
+        // Empty map clears any fields left over from an earlier pick.
+        _applyNominatimAddress(osm?.address ?? const {});
+        // The picked place's own fields beat the city-level lookup's.
+        final city = s('city') ?? (s('type') == 'city' ? s('name') : null);
+        final area = s('district') ?? s('locality');
+        if (city != null) _cityCtrl.text = city;
+        if (area != null && area != _cityCtrl.text) _areaCtrl.text = area;
+        if (s('state') != null) _stateCtrl.text = s('state')!;
+        if (s('postcode') != null) _pincodeCtrl.text = s('postcode')!;
+        if (_districtCtrl.text.isEmpty && s('county') != null) {
+          _districtCtrl.text = s('county')!;
         }
         _locating = false;
       });
@@ -597,12 +517,11 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
         }
       }
       if (!mounted) return;
-      // No GPS fix and Google couldn't place the address: save the typed
+      // No GPS fix and the address couldn't be placed on the map: save the typed
       // address on its own (see ProfileModel.hasLocation).
       _resolvedAddress = address;
       _lat = coords?.lat;
       _lng = coords?.lng;
-      _placeId = null;
     } else if (_resolvedAddress == null || _lat == null || _lng == null) {
       return;
     }
@@ -612,7 +531,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
       'work_address': _resolvedAddress,
       'latitude': _lat,
       'longitude': _lng,
-      'google_place_id': _placeId,
+      'google_place_id': null, // clears any ID left from Google Places
       'city': _cityCtrl.text.trim(),
       'area': _areaCtrl.text.trim().isEmpty ? null : _areaCtrl.text.trim(),
       'district': _districtCtrl.text.trim(),
@@ -1246,7 +1165,49 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
 }
 
 class _PlaceSuggestion {
-  final String placeId;
   final String description;
-  _PlaceSuggestion({required this.placeId, required this.description});
+  final double lat;
+  final double lng;
+
+  /// Photon's raw properties (name, city, district, county, state, postcode…).
+  final Map props;
+
+  _PlaceSuggestion({
+    required this.description,
+    required this.lat,
+    required this.lng,
+    required this.props,
+  });
+
+  /// Null for results outside India or without coordinates.
+  static _PlaceSuggestion? fromPhoton(Map feature) {
+    final props = feature['properties'];
+    final coords = feature['geometry']?['coordinates'];
+    if (props is! Map || coords is! List || coords.length < 2) return null;
+    if (props['countrycode'] != 'IN') return null;
+    // Unique, non-empty parts from most to least specific.
+    final parts = <String>[];
+    for (final k in [
+      'name',
+      'street',
+      'district',
+      'city',
+      'county',
+      'state',
+      'postcode',
+    ]) {
+      final v = props[k];
+      if (v is String && v.trim().isNotEmpty && !parts.contains(v)) {
+        parts.add(v);
+      }
+    }
+    if (parts.isEmpty) return null;
+    return _PlaceSuggestion(
+      description: parts.join(', '),
+      // GeoJSON order is [lon, lat].
+      lat: (coords[1] as num).toDouble(),
+      lng: (coords[0] as num).toDouble(),
+      props: props,
+    );
+  }
 }
